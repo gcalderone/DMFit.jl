@@ -26,7 +26,7 @@ Pkg.clone("https://github.com/gcalderone/DMFit.jl.git")
 
 On Julia v0.7/v1.0:
 ```julia
-Pkg.develop("https://github.com/gcalderone/DMFit.jl.git")
+] dev https://github.com/gcalderone/DMFit.jl
 ```
 
 ## Simple example:
