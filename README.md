@@ -93,8 +93,8 @@ f1(x, p1, p2, p3) = @.  p1  +  p2 * x  +  p3 * x^2
 f2(x, p4, p5) = @. p4 * sin(p5 * x)
 f3(x) = cos.(x)
 
-model2 = Model(:comp1 => FuncWrap(f1, p1, p2, p3),
-               :comp2 => FuncWrap(f2, p4, p5),
+model2 = Model(:comp1 => FuncWrap(f1, params[1], params[2], params[3]),
+               :comp2 => FuncWrap(f2, params[4], params[5]),
                :comp3 => FuncWrap(f3))
 prepare!(model2, dom, :((comp1 + comp2) * comp3))
 result2 = fit!(model2, data)
@@ -220,9 +220,9 @@ The `DMFit` framework provides an effective way to check a component performance
 
 For instance, you may wonder if the `FuncWrap` component used in the previous example as a wrapper to the `f` function introduces any performance penalty.  With `test_component` you may simply compare the wrapper performance with that of a simple loop, i.e.:
 ```julia
-test_component(dom, FuncWrap(f, p1, p2, p3, p4, p5), 1000)
+test_component(dom, FuncWrap(f, params...), 1000)
 @time for i in 1:1000
-    dummy = f(x, p1, p2, p3, p4, p5)
+    dummy = f(x, params...)
 end
 ```
 As you can see there is no significant difference in looping 1000 times on model evaluations or using a simple loop on `f`.
