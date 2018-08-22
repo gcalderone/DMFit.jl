@@ -1,6 +1,9 @@
 # DMFit.jl 
 
 [![Build Status](https://travis-ci.org/gcalderone/DMFit.jl.svg?branch=master)](https://travis-ci.org/gcalderone/DMFit.jl)
+[![Coverage Status](https://coveralls.io/repos/github/gcalderone/DMFit.jl/badge.svg?branch=master)](https://coveralls.io/github/gcalderone/DMFit.jl?branch=master)
+[![codecov](https://codecov.io/gh/gcalderone/DMFit.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/gcalderone/DMFit.jl)
+
 
 `DMFit` is a general purpose Data-driven Model Fitting framework for Julia.
 
@@ -53,7 +56,7 @@ using DMFit
 dom = Domain(x)
 data = Measures(y + noise, 1.)
 ```
-The second argument to the `Measures` function is the uncertainty associated to each data sample.  It can either be an array with the same shape as the first argument or a scalar.  In the latter case all data samples will have the same uncertainty.
+The second argument to the `Measures` function is the (1 sigma Gaussian) uncertainty associated to each data sample.  It can either be an array with the same shape as the first argument or a scalar.  In the latter case all data samples will have the same uncertainty.
 
 Also, we must create a `Model` object containing a reference to the analytical formula, and prepare it for evaluation on the domain `dom`
 ```julia
