@@ -66,8 +66,6 @@ test_component(dom, FuncWrap(f, params...), 1000)
     dummy = f(x, params...)
 end
 
-using CMPFit
-result2 = fit!(model2, [data, data2], minimizer=CMPFit.Minimizer())
 
 DMFit.@code_ndim 3
 
@@ -113,7 +111,7 @@ model.comp[:comp1].p1.low  = 0.5 # lower limit
 model.comp[:comp1].p1.high = 1.5 # upper limit
 model.comp[:comp1].p2.val  = 2.4
 model.comp[:comp1].p2.fixed = true
-result = fit!(model, data, minimizer=CMPFit.Minimizer())
+result = fit!(model, data)
 
 
 
