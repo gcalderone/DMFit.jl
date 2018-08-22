@@ -7,7 +7,7 @@
 ## Key features:
 - it handles data of any dimensionality;
 - the fitting model is evaluated on a user provided (Cartesian or Linear) domain;
-- the fitting model is built up by individual *components*, either provided in the companion package by `DMFit_Components` or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
+- the fitting model is built up by individual *components*, either provided in the companion package [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
 - all components results are cached, so that repeated evaluations with the same parameters do not involve further calculations.  This is very important to speed up the fitting process when many components are involved;
 - it allows fitting multiple data sets;
 - it easily allows to use different minimizers, and compare their results and performances.  Currently two minimizers are supported ([LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl) and [CMPFit](https://github.com/gcalderone/CMPFit.jl));
@@ -199,7 +199,7 @@ To evaluate the model with a different parameter value you can pass one (or more
 
 ## The `FuncWrap` and `SimpleParam` components.
 
-`FuncWrap` and `SimpleParam` are the only built-in components of the `DMFit` package.  Further components are available in the `DMFit_SimpleComponents` package.
+`FuncWrap` and `SimpleParam` are the only built-in components of the `DMFit` package.  Further components are available in the [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) package.
 
 The `FuncWrap` is simply a wrapper to a user defined function of the form `f(x, [y], [z], [further dimensions...], p1, p2, [further parameters...])`.  The number of parameters should be between 0 and 10.  If further parameters are needed the appropriate code can be generated using the `DMFit.@code_funcwrap_npar` macro, i.e.:
 ```julia
