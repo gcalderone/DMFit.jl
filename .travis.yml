@@ -5,6 +5,7 @@ os:
   - osx
 julia:
   - 0.6
+  - 1.0
   - nightly
 notifications:
   email: false
@@ -18,10 +19,10 @@ matrix:
     - julia: nightly
 
 ## uncomment and modify the following lines to manually install system packages
-addons:
-  apt: # apt-get for linux
-    packages:
-    - gnuplot
+# addons:
+#   apt: # apt-get for linux
+#     packages:
+#     - gnuplot
 
 before_script: # homebrew for mac
   - if [ $TRAVIS_OS_NAME = osx ]; then brew install gnuplot; fi
