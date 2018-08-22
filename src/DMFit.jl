@@ -1,3 +1,4 @@
+
 __precompile__(true)
 
 module DMFit
@@ -187,6 +188,32 @@ end
 # --------------------------------------------------------------------
 compdata(domain::AbstractDomain, comp::AbstractComponent) =
     error("Component " * string(typeof(comp)) * " must implement its own version of `compdata`.")
+
+
+
+# --------------------------------------------------------------------
+"""
+# prepare!
+
+Recompile the expressions after one (or more) parameter expressions have been changed
+"""
+function prepare!(model::Model)
+    bkp = deepcopy(model)
+
+    # Delete all compiled expressions and results
+    empty = Model()
+    model.compiled = empty.compiled
+    model.results = empty.results
+    model.domainid = empty.domainid
+
+    # Recompile expressions
+    for i in 1:length(bkp.compiled)
+        prepare!(model, bkp.compiled[1].domain, bkp.compiled[1].exprs)
+    end
+    
+    return model
+end
+
 
 # --------------------------------------------------------------------
 """
