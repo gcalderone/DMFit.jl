@@ -410,7 +410,7 @@ end
 Set a component value in the model
 """
 function setcompvalue!(model::Model, cname::Symbol, value::Number=NaN)
-    model.altValues[cname] = value
+    model.altValues[cname] = float(value)
     evaluate!(model)
     return value
 end
