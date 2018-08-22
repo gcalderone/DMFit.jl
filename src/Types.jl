@@ -25,14 +25,28 @@ mutable struct FuncWrap_cdata <: AbstractComponentData
 end
 
 
-macro code_ndim(ndim::Int)
+macro code_ndim(ndim::Int, importf=true)
+    prefix = (importf  ?  "DMFit."  :  "")
+    
     @assert ndim >= 1 "Number of dimensions must be >= 1"
     out = Expr(:block)
 
+    if importf
+        s = Vector{String}()
+        push!(s, "import DMFit.Domain, DMFit.flatten, DMFit.Measures, DMFit.Counts, DMFit.evaluate!")
+        push!(out.args, Meta_parse(join(s, "\n")))
+    end
+
     # Structure def.
-    s = Vector{String}()
     if ndim > 1
-        push!(s, "struct CartesianDomain_$(ndim)D <: DMFit.AbstractCartesianDomain")
+        s = Vector{String}()
+        if importf
+            push!(s, "import DMFit.CartesianDomain")
+            push!(out.args, Meta_parse(join(s, "\n")))
+        end
+        
+        s = Vector{String}()
+        push!(s, "struct CartesianDomain_$(ndim)D <: $(prefix)AbstractCartesianDomain")
         push!(s, "  d::Vector{Vector{Float64}}")
         push!(s, "  size::NTuple{$(ndim), Int}")
         push!(s, "  index::Vector{Int}")
@@ -88,7 +102,7 @@ macro code_ndim(ndim::Int)
 
     # Structure def.
     s = Vector{String}()
-    push!(s, "struct Domain_$(ndim)D <: DMFit.AbstractLinearDomain")
+    push!(s, "struct Domain_$(ndim)D <: $(prefix)AbstractLinearDomain")
     if ndim == 1
         push!(s, "  d::Vector{Float64}")
     else
@@ -182,7 +196,7 @@ macro code_ndim(ndim::Int)
     end
 
     s = Vector{String}()
-    push!(s, "struct Measures_$(ndim)D <: DMFit.AbstractMeasures")
+    push!(s, "struct Measures_$(ndim)D <: $(prefix)AbstractMeasures")
     push!(s, "  measure::Array{Float64, $(ndim)}")
     push!(s, "  uncert::Array{Float64, $(ndim)}")
     push!(s, "end")
@@ -191,7 +205,7 @@ macro code_ndim(ndim::Int)
     s = Vector{String}()
     push!(s, "  function Measures(measure::Array{Float64, $(ndim)}, uncert::Array{Float64, $(ndim)})")
     push!(s, "      @assert length(measure) == length(uncert) \"Measure and uncertainty arrays must have same size\"")
-    push!(s, "      DMFit.Measures_$(ndim)D(measure, uncert)")
+    push!(s, "      $(prefix)Measures_$(ndim)D(measure, uncert)")
     push!(s, "  end")
     push!(out.args, Meta_parse(join(s, "\n")))
 
@@ -204,7 +218,7 @@ macro code_ndim(ndim::Int)
     push!(out.args, Meta_parse(join(s, "\n")))
 
     s = Vector{String}()
-    push!(s, "struct Counts_$(ndim)D <: DMFit.AbstractCounts")
+    push!(s, "struct Counts_$(ndim)D <: $(prefix)AbstractCounts")
     push!(s, "  measure::Array{Int, $(ndim)}")
     push!(s, "end")
     push!(out.args, Meta_parse(join(s, "\n")))
@@ -221,7 +235,7 @@ macro code_ndim(ndim::Int)
     push!(out.args, Meta_parse(s))
 
     s = Vector{String}()
-    push!(s, "function evaluate!(output::Vector{Float64}, domain::Domain_$(ndim)D, compdata::DMFit.FuncWrap_cdata, params...)")
+    push!(s, "function evaluate!(output::Vector{Float64}, domain::Domain_$(ndim)D, compdata::$(prefix)FuncWrap_cdata, params...)")
     push!(s, "  output .= compdata.func(" * join("domain[" .* string.(collect(1:ndim)) .* "]", ", ") * ", params...)")
     push!(s, "end")
     push!(out.args, Meta_parse(join(s, "\n")))
@@ -229,8 +243,8 @@ macro code_ndim(ndim::Int)
     return esc(out)
 end
 
-@code_ndim 1
-@code_ndim 2
+@code_ndim 1 false
+@code_ndim 2 false
 
 # The following methods do not require a macro to be implemented
 getaxismin(dom::AbstractLinearDomain, dim::Int) = dom.vmin[dim]
@@ -672,35 +686,43 @@ end
 
 # --------------------------------------------------------------------
 # FuncWrap
-macro code_funcwrap_npar(np)
+macro code_funcwrap_npar(np, importf=true)
+    prefix = (importf  ?  "DMFit."  :  "")
+    
     out = Expr(:block)
+
+    if importf
+        s = "import DMFit.FuncWrap, DMFit.compdata"
+        push!(out.args, Meta_parse(s))
+    end
+
     s = ""
-    s *= "mutable struct FuncWrap" * string(np) * " <: DMFit.AbstractComponent\n"
+    s *= "mutable struct FuncWrap" * string(np) * " <: $(prefix)AbstractComponent\n"
     s *= "  func::Function\n"
     for i in 1:np
-        s *= "  p$i::DMFit.Parameter\n"
+        s *= "  p$i::$(prefix)Parameter\n"
     end
     s *= "end\n"
-    push!(out.args, Meta.parse(s))
+    push!(out.args, Meta_parse(s))
 
-    s = "DMFit.compdata(domain::DMFit.AbstractDomain, comp::FuncWrap" * string(np) * ") = DMFit.FuncWrap_cdata(comp.func)\n"
-    push!(out.args, Meta.parse(s))
+    s = "compdata(domain::$(prefix)AbstractDomain, comp::FuncWrap" * string(np) * ") = FuncWrap_cdata(comp.func)\n"
+    push!(out.args, Meta_parse(s))
 
     s = "FuncWrap(func::Function, " * join("p" .* string.(collect(1:np)) .* "::Number", ", ") * ") = "
-    s *= "FuncWrap" * string(np) * "(func, " * join("DMFit.Parameter(p" .* string.(collect(1:np)) .* ")", ", ") .* ")\n"
-    push!(out.args, Meta.parse(s))
+    s *= "FuncWrap" * string(np) * "(func, " * join("$(prefix)Parameter(p" .* string.(collect(1:np)) .* ")", ", ") .* ")\n"
+    push!(out.args, Meta_parse(s))
 
     return esc(out)
 end
 
-@code_funcwrap_npar  0
-@code_funcwrap_npar  1
-@code_funcwrap_npar  2
-@code_funcwrap_npar  3
-@code_funcwrap_npar  4
-@code_funcwrap_npar  5
-@code_funcwrap_npar  6
-@code_funcwrap_npar  7
-@code_funcwrap_npar  8
-@code_funcwrap_npar  9
-@code_funcwrap_npar 10
+@code_funcwrap_npar  0 false
+@code_funcwrap_npar  1 false
+@code_funcwrap_npar  2 false
+@code_funcwrap_npar  3 false
+@code_funcwrap_npar  4 false
+@code_funcwrap_npar  5 false
+@code_funcwrap_npar  6 false
+@code_funcwrap_npar  7 false
+@code_funcwrap_npar  8 false
+@code_funcwrap_npar  9 false
+@code_funcwrap_npar 10 false

@@ -570,7 +570,7 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     if !support_param_limits(minimizer)
         if  (length(findall(isfinite.(getfield.(params, :low )))) > 0)  ||
             (length(findall(isfinite.(getfield.(params, :high)))) > 0)
-            @warn "Parameter bounds are not supported by " * string(typeof(minimizer))
+            printstyled(color=:red, bold=true, "Parameter bounds are not supported by " * string(typeof(minimizer)))
         end
     end
 
@@ -612,7 +612,7 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     #try
         (status, bestfit_val, bestfit_unc) = minimize(minimizer, evaluate1D, c1d_measure, c1d_uncert, params[ifree])
         if length(bestfit_val) != length(ifree)
-            error("Length of best fit parameters ($(length(bestfit))) do not match number of free parameters ($(length(ifree)))")
+            error("Length of best fit parameters ($(length(bestfit_val))) do not match number of free parameters ($(length(ifree)))")
         end
 
         pvalues[ifree] .= bestfit_val
@@ -662,8 +662,6 @@ function minimize(minimizer::Minimizer, evaluate::Function,
 
     dom = collect(1.:length(measure))
     bestfit = LsqFit.curve_fit(callback, dom, measure, 1. ./ uncert, getfield.(params, :val))
-    #error   = LsqFit.estimate_errors(bestfit)
-    error   = LsqFit.margin_error(bestfit, 0.6827)
 
     # Prepare output
     status = :NonOptimal
@@ -671,7 +669,13 @@ function minimize(minimizer::Minimizer, evaluate::Function,
         status = :Optimal
     end
 
-    return (status, getfield.(Ref(bestfit), :param), error)
+    if oldver()
+        error = LsqFit.estimate_errors(bestfit)
+        return (status, getfield.(bestfit, :param), error)
+    else
+        error = LsqFit.margin_error(bestfit, 0.6827)
+        return (status, getfield.(Ref(bestfit), :param), error)
+    end
 end
 
 end
