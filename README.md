@@ -67,8 +67,8 @@ The `comp1` symbol is the name we chose to identify the component in the model. 
 
 The parameter initial values are those given in the component constructors.  Such values can be changed as follows:
 ```julia
- model1[:comp1].p1.val = 1
- model1[:comp1].p2.val = 1.e-3
+model1[:comp1].param[1].val = 1
+model1[:comp1].param[2].val = 1.e-3
  ```
  etc.
 
@@ -170,8 +170,8 @@ From this structure the user can retrieve the parameter best fit values and unce
 
 In particular, the best fit value and uncertanty for `p1` can be retrieved as follows:
 ```julia
-println(result2.param[:comp1__p1].val)
-println(result2.param[:comp1__p1].unc)
+println(result2.param[:comp1__param1].val)
+println(result2.param[:comp1__param1].unc)
 ```
 Note that the parameter is identified by using both the component name and parameter name, separated by a double underscore `__`.prepending the 
 
@@ -204,11 +204,7 @@ To evaluate the model with a different parameter value you can pass one (or more
 
 `FuncWrap` and `SimpleParam` are the only built-in components of the `DMFit` package.  Further components are available in the [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) package.
 
-The `FuncWrap` is simply a wrapper to a user defined function of the form `f(x, [y], [z], [further dimensions...], p1, p2, [further parameters...])`.  The number of parameters should be between 0 and 10.  If further parameters are needed the appropriate code can be generated using the `DMFit.@code_funcwrap_npar` macro, i.e.:
-```julia
-DMFit.@code_funcwrap_npar 20
-```
-will allow to use `FuncWrap` with 20 parameters.
+The `FuncWrap` is simply a wrapper to a user defined function of the form `f(x, [y], [z], [further dimensions...], p1, p2, [further parameters...])`.
 
 The `SimpleParam` represent a scalar component in the model, whose value is given by the `val` parameter.
 
@@ -327,24 +323,24 @@ Each model parameter has a few settings that can be tweaked by the user before r
 
 Considering the previous example we can limit the interval for `p1`, and fix the value for `p2` as follows:
 ```julia
-model.comp[:comp1].p1.val  = 1   # guess initial value
-model.comp[:comp1].p1.low  = 0.5 # lower limit
-model.comp[:comp1].p1.high = 1.5 # upper limit
-model.comp[:comp1].p2.val  = 2.4
-model.comp[:comp1].p2.fixed = true
+model.comp[:comp1].param[1].val  = 1   # guess initial value
+model.comp[:comp1].param[1].low  = 0.5 # lower limit
+model.comp[:comp1].param[1].high = 1.5 # upper limit
+model.comp[:comp1].param[2].val  = 2.4
+model.comp[:comp1].param[2].fixed = true
 result = fit!(model, data, minimizer=CMPFit.Minimizer())
 ```
 
 To remove the limits on `p1` simply set their bounds to +/- Inf:
 ```julia
-model.comp[:comp1].p1.low  = -Inf
-model.comp[:comp1].p1.high = +Inf
+model.comp[:comp1].param[1].low  = -Inf
+model.comp[:comp1].param[1].high = +Inf
 ```
 
 As another example we may constrain `p2` to always be twice the value of `p1`:
 ```julia
-model.comp[:comp1].p2.expr = "2 * comp1__p1"
-model.comp[:comp1].p2.fixed = true
+model.comp[:comp1].param[2].expr = "comp1__param1 + comp1__param2"
+model.comp[:comp1].param[2].fixed = false
 ```
 
 **Important note:** each time you change one (or more) parameter expression(s) you should call `prepare!` passing just the model as argument.  This is required to recompile the model:

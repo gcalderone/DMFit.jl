@@ -402,20 +402,18 @@ function show(stream::IO, comp::AbstractComponent; color=:default, header=true, 
     end
 
     extraFields = false
-    for field in fieldnames(typeof(comp))
-        if fieldtype(typeof(comp), field) != Parameter
-            extraFields = true
-            continue
-        end
+    (wnames, params) = getparams(comp)
+    for i in 1:length(params)
+        par = params[i]
+        wname = wnames[i]
 
-        par = getfield(comp, field)
         note = ""
         (par.fixed)  &&  (note *= "FIXED")
         (par.expr != "")  &&  (note *= " expr=" * par.expr)
 
         count += 1
         s = @sprintf("%5d|%20s|%10s|%10.3g|%10.3g|%10.3g|%s\n",
-                     count, cname, string(field),
+                     count, cname, wname,
                      par.val, par.low, par.high, note)
         printstyled(color=color, stream, s)
     end
@@ -423,11 +421,11 @@ function show(stream::IO, comp::AbstractComponent; color=:default, header=true, 
     if extraFields  &&  header
         println(stream)
         println(stream, "Extra fields:")
-        for field in fieldnames(typeof(comp))
-            if fieldtype(typeof(comp), field) == Parameter
+        for pname in fieldnames(typeof(comp))
+            if fieldtype(typeof(comp), pname) == Parameter
                 continue
             end
-            println(stream, string(field), " : ", string(fieldtype(typeof(comp), field)))
+            println(stream, string(pname), " : ", string(fieldtype(typeof(comp), pname)))
         end
     end
     return count
@@ -684,45 +682,20 @@ function evaluate!(output::AbstractArray{Float64}, domain::AbstractDomain,
 end
 
 
+
 # --------------------------------------------------------------------
 # FuncWrap
-macro code_funcwrap_npar(np, importf=true)
-    prefix = (importf  ?  "DMFit."  :  "")
-    
-    out = Expr(:block)
-
-    if importf
-        s = "import DMFit.FuncWrap, DMFit.compdata"
-        push!(out.args, Meta_parse(s))
-    end
-
-    s = ""
-    s *= "mutable struct FuncWrap" * string(np) * " <: $(prefix)AbstractComponent\n"
-    s *= "  func::Function\n"
-    for i in 1:np
-        s *= "  p$i::$(prefix)Parameter\n"
-    end
-    s *= "end\n"
-    push!(out.args, Meta_parse(s))
-
-    s = "compdata(domain::$(prefix)AbstractDomain, comp::FuncWrap" * string(np) * ") = FuncWrap_cdata(comp.func)\n"
-    push!(out.args, Meta_parse(s))
-
-    s = "FuncWrap(func::Function, " * join("p" .* string.(collect(1:np)) .* "::Number", ", ") * ") = "
-    s *= "FuncWrap" * string(np) * "(func, " * join("$(prefix)Parameter(p" .* string.(collect(1:np)) .* ")", ", ") .* ")\n"
-    push!(out.args, Meta_parse(s))
-
-    return esc(out)
+mutable struct FuncWrap <: AbstractComponent
+    func::Function
+    param::Vector{Parameter}
 end
 
-@code_funcwrap_npar  0 false
-@code_funcwrap_npar  1 false
-@code_funcwrap_npar  2 false
-@code_funcwrap_npar  3 false
-@code_funcwrap_npar  4 false
-@code_funcwrap_npar  5 false
-@code_funcwrap_npar  6 false
-@code_funcwrap_npar  7 false
-@code_funcwrap_npar  8 false
-@code_funcwrap_npar  9 false
-@code_funcwrap_npar 10 false
+function FuncWrap(func::Function, args...)
+    params= Vector{Parameter}()
+    for i in 1:length(args)
+        push!(params, Parameter(args[i]))
+    end
+    return FuncWrap(func, params)
+end
+
+compdata(domain::DMFit.AbstractDomain, comp::FuncWrap) = FuncWrap_cdata(comp.func)

@@ -1,4 +1,3 @@
-
 __precompile__(true)
 
 module DMFit
@@ -66,6 +65,9 @@ function nparams(comp::AbstractComponent)
         if fieldtype(typeof(comp), pname) == Parameter
             count += 1
         end
+        if fieldtype(typeof(comp), pname) == Vector{Parameter}
+            count += length(getfield(comp, pname))
+        end
     end
     return count
 end
@@ -113,74 +115,71 @@ function push!(model::Model, cname::Symbol, comp::T) where T <: AbstractComponen
 end
 
 
-# --------------------------------------------------------------------
-function modelparams!(model::Model, newvalues::Vector{Float64}, parToUpdate=Vector{Symbol}())
-    if length(parToUpdate) > 0
-        @assert length(parToUpdate) == length(newvalues)
-    end
-    @assert length(findall(.!isfinite.(newvalues))) == 0
+function getparams(comp::T, cname::String="") where T <: AbstractComponent
+    prefix = cname
+    (prefix != "")  &&  (prefix *= "__")
+    pnames = Vector{String}()
+    params = Vector{Parameter}()
+    for pname in fieldnames(typeof(comp))
+        isVector = false
+        if fieldtype(typeof(comp), pname) == Parameter
+            push!(params, getfield(comp, pname))
+        elseif fieldtype(typeof(comp), pname) == Vector{Parameter}
+            isVector = true
+            push!(params, getfield(comp, pname)...)
+        else
+            continue
+        end
 
-    count = 1
-    for (cname, comp) in model.comp
-        for pname in fieldnames(typeof(comp))
-            if fieldtype(typeof(comp), pname) == Parameter
-                wname = Symbol(cname, "__", pname)
-                par = getfield(comp, pname)
-
-                newval = NaN
-                if length(newvalues) != 0
-                    if length(parToUpdate) != 0
-                        i = findall(wname .== parToUpdate)
-                        if length(i) == 1
-                            newval = newvalues[i[1]]
-                            newvalues[i] .= NaN
-                        end
-                    else
-                        newval = newvalues[count]
-                        count += 1
-                    end
-                end
-                if isfinite(newval)
-                    @assert (par.low <= newval <= par.high) "Value of parameter $(wname) is outside limits: $(par.low) < $(newval) < $(par.high)"
-                    par.val = newval
-                end
-            end
+        for i in 1:length(params)
+            wname = prefix * string(pname)
+            (isVector)  &&  (wname *= string(i))
+            push!(pnames, wname)
         end
     end
-
-    if length(parToUpdate) != 0
-        i = findall(.!isnan.(newvalues))
-        if length(i) != 0
-            error("Parameter names " * join(string.(parToUpdate[i]), ", ") * " do not exists.")
-        end
-    end
-
-    return modelparams(model)
+    return (pnames, params)
 end
 
 
-function modelparams(model::Model)
-    cnames = Vector{Symbol}()
-    pnames = Vector{Symbol}()
-    wnames = Vector{Symbol}()
-    params = Vector{Parameter}()
+function getsetparams!(model::Model, newvalues=Vector{Float64}(), parToUpdate=Vector{Symbol}())
+    out_cnames = Vector{Symbol}()
+    out_pnames = Vector{Symbol}()
+    out_wnames = Vector{Symbol}()
+    out_params = Vector{Parameter}()
 
+    count = 0
     for (cname, comp) in model.comp
-        for pname in fieldnames(typeof(comp))
-            if fieldtype(typeof(comp), pname) == Parameter
-                wname = Symbol(cname, "__", pname)
-                par = getfield(comp, pname)
-                @assert (par.low <= par.val <= par.high) "Value of parameter $(wname) is outside limits: $(par.low) < $(par.val) < $(par.high)"
-                (isfinite(model.altValues[cname]))  &&  (par.fixed = true)
+        (pnames, params) = getparams(comp)
+        for i in 1:length(params)
+            par = params[i]
+            pname = pnames[i]
+            wname = string(cname) * "__" * pname
 
-                push!(cnames, cname)
-                push!(pnames, pname)
-                push!(wnames, wname)
-                push!(params, par)
+            newval = NaN
+            if length(newvalues) != 0
+                if length(parToUpdate) != 0
+                    j = findall(wname .== parToUpdate)
+                    (length(i) == 1)  &&  (newval = newvalues[j[1]])
+                else
+                    count += 1
+                    newval = newvalues[count]
+                end
             end
+            if isfinite(newval)
+                @assert (par.low <= newval <= par.high) "Value of parameter $(wname) is outside limits: $(par.low) < $(newval) < $(par.high)"
+                par.val = newval
+            end
+
+            @assert (par.low <= par.val <= par.high) "Value of parameter $(wname) is outside limits: $(par.low) < $(par.val) < $(par.high)"
+            (isfinite(model.altValues[cname]))  &&  (par.fixed = true)
+
+            push!(out_cnames, cname)
+            push!(out_pnames, Symbol(pname))
+            push!(out_wnames, Symbol(wname))
+            push!(out_params, par)
         end
     end
-    return (cnames, pnames, wnames, params)
+    return (out_cnames, out_pnames, out_wnames, out_params)
 end
 
 
@@ -210,7 +209,7 @@ function prepare!(model::Model)
     for i in 1:length(bkp.compiled)
         prepare!(model, bkp.compiled[1].domain, bkp.compiled[1].exprs)
     end
-    
+
     return model
 end
 
@@ -223,13 +222,14 @@ Prepare a model to be evaluated on the given domain, with the given
 mathematical expression to join the components.
 """
 function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cache=true)
+
     function CompiledExpression1(model::Model, exprs::Vector{Expr}; cache=true)
         function parse_model_expr(expr, cnames, simple=Vector{Symbol}(), composite=Vector{Symbol}())
             if typeof(expr) == Expr
                 # Parse the expression to check which components are involved
                 for i in 1:length(expr.args)
                     arg = expr.args[i]
-
+                    
                     if typeof(arg) == Symbol
                         if arg in cnames # if it is one of the model components...
                             if i == 1  &&  expr.head == :call # ... and it is a function call...
@@ -257,10 +257,10 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
             push!(compInvolved, a...)
         end
         compInvolved = unique(compInvolved)
-
+        
         # Prepare the code for model evaluation
         code = Vector{String}()
-        (cnames, pnames, wnames, params) = modelparams(model)
+        (cnames, pnames, wnames, params) = getsetparams!(model)
         push!(code, "(_m::CompiledExpression, _altValues::HashVector{Float64}, _results::Vector{Vector{Float64}}, " *
               join(string.(wnames) .* "::Float64", ", ") * ", _unused_...) -> begin")
         # The last argument, _unused_, allows to push! further
@@ -277,49 +277,48 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
             push!(code, "  if isfinite(_altValues[$countAll])")
             push!(code, "    $cname = _altValues[$countAll]")
             push!(code, "  else")
-            for pname in fieldnames(typeof(comp))
-                if fieldtype(typeof(comp), pname) == Parameter
-                    par = getfield(comp, pname)
-                    if par.expr != ""
-                        if oldver()
-                            push!(code, "    $(cname)__$(pname) = " * replace(par.expr, "this__", "$(cname)__"))
-                        else
-                            push!(code, "    $(cname)__$(pname) = " * replace(par.expr, "this__" => "$(cname)__"))
-                        end
+
+            (wnames, params) = getparams(comp, string(cname))
+            for i in 1:length(params)
+                par = params[i]
+                wname = wnames[i]
+
+                if par.expr != ""
+                    if oldver()
+                        push!(code, "    $(wname) = " * replace(par.expr, "this__", "$(cname)__"))
+                    else
+                        push!(code, "    $(wname) = " * replace(par.expr, "this__" => "$(cname)__"))
                     end
                 end
             end
 
             tmp1 = ""
-            count = 1
-            for pname in fieldnames(typeof(comp))
-                if fieldtype(typeof(comp), pname) == Parameter
-                    (count > 1)  &&  (tmp1 *= "  ||  ")
-                    tmp1 *= "(_m.cevals[$countInv].lastParams[$count] != $(cname)__$(pname))"
-                    count += 1
-                end
+            count = 0
+            for i in 1:length(params)
+                count += 1
+                wname = wnames[i]
+                (count > 1)  &&  (tmp1 *= "  ||  ")
+                tmp1 *= "(_m.cevals[$countInv].lastParams[$count] != $(wname))"
             end
-            if count == 1
+            if count == 0
                 tmp1 = "_m.cevals[$countInv].counter < 1"
             end
 
             if (tmp1 != "")  &&  cache
                 push!(code, "    if $tmp1")
-                count = 1
-                for pname in fieldnames(typeof(comp))
-                    if fieldtype(typeof(comp), pname) == Parameter
-                        push!(code, "      _m.cevals[$countInv].lastParams[$count] = $(cname)__$(pname)")
-                        count += 1
-                    end
+                count = 0
+                for i in 1:length(params)
+                    count += 1
+                    wname = wnames[i]
+                    push!(code, "      _m.cevals[$countInv].lastParams[$count] = $(wname)")
                 end
             end
             push!(code, "      _m.cevals[$countInv].counter += 1")
 
             tmp2 = "      evaluate!(_m.cevals[$countInv].result, _m.ldomain, _m.cevals[$countInv].cdata"
-            for pname in fieldnames(typeof(comp))
-                if fieldtype(typeof(comp), pname) == Parameter
-                    tmp2 *= ", $(cname)__$(pname)"
-                end
+            for i in 1:length(params)
+                wname = wnames[i]
+                tmp2 *= ", $(wname)"
             end
             tmp2 *= ")"
             push!(code, tmp2)
@@ -329,7 +328,7 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
             push!(code, "  end")
             push!(code, "")
         end
-
+        
         j = 1 + length(model.results)
         push!(code, "  if length(_results[$j]) <= 1")
         for i in 1:length(exprs)
@@ -353,6 +352,7 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
         funct = eval(expr2)
         return (code, funct, compInvolved)
     end
+    
 
     function CompiledExpression2(model::Model, domain::AbstractDomain, compInvolved::Vector{Symbol})
         ldomain = domain
@@ -404,6 +404,11 @@ function checkID(model::Model, id::Int)
     @assert 1 <= id <= length(model.compiled) "Invalid index (allowed range: 1 : " * string(length(model.compiled)) * ")"
 end
 
+"""
+# evaluate!
+
+Evaluate the model(s)
+"""
 function evaluate!(model::Model, id::Int, pvalues::Vector{Float64})
     checkID(model, id)
     return Base.invokelatest(model.compiled[id].funct, model.compiled[id], model.altValues, model.results, pvalues...)
@@ -416,14 +421,8 @@ function evaluate!(model::Model, pvalues::Vector{Float64})
     return model
 end
 
-
-"""
-# evaluate!
-
-Evaluate the model(s)
-"""
 function evaluate!(model::Model)
-    (cnames, pnames, wnames, params) = modelparams(model)
+    (cnames, pnames, wnames, params) = getsetparams!(model)
     pvalues = getfield.(params, :val)
     return evaluate!(model, pvalues)
 end
@@ -486,7 +485,7 @@ function (model::Model)(id::Int, params::Vararg{Pair{Symbol,T}}) where T <: Numb
             push!(pnames, pname)
             push!(pvalues, pvalue)
         end
-        modelparams!(model, pvalues, pnames)
+        getsetparams!(model, pvalues, pnames)
         evaluate!(model)
     end
     return model(id)
@@ -554,6 +553,7 @@ function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, i
     if iter > 0
         println()
         printstyled(color=:magenta, bold=true, "Further evaluations ($iter):\n")
+
         @time begin
             for i in 1:iter
                 result = evaluate!(model)
@@ -589,7 +589,7 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     @assert length(model.results) == length(data) "Model has " * string(length(model.results)) * " expressions but " * string(length(data)) * " data were given."
 
     # Check if the minimizer supports bounded parameters
-    (cnames, pnames, wnames, params) = modelparams(model)
+    (cnames, pnames, wnames, params) = getsetparams!(model)
     pvalues = getfield.(params, :val)
     ifree = findall(.! getfield.(params, :fixed))
     @assert length(ifree) > 0 "No free parameter in the model"
@@ -637,27 +637,27 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     end
 
     #try
-        (status, bestfit_val, bestfit_unc) = minimize(minimizer, evaluate1D, c1d_measure, c1d_uncert, params[ifree])
-        if length(bestfit_val) != length(ifree)
-            error("Length of best fit parameters ($(length(bestfit_val))) do not match number of free parameters ($(length(ifree)))")
-        end
+    (status, bestfit_val, bestfit_unc) = minimize(minimizer, evaluate1D, c1d_measure, c1d_uncert, params[ifree])
+    if length(bestfit_val) != length(ifree)
+        error("Length of best fit parameters ($(length(bestfit_val))) do not match number of free parameters ($(length(ifree)))")
+    end
 
-        pvalues[ifree] .= bestfit_val
-        uncert = fill(NaN, length(pvalues))
-        uncert[ifree] .= bestfit_unc
+    pvalues[ifree] .= bestfit_val
+    uncert = fill(NaN, length(pvalues))
+    uncert[ifree] .= bestfit_unc
 
-        bestfit = HashVector{FitParameter}()
-        for i in 1:length(params)
-            push!(bestfit, wnames[i], FitParameter(pvalues[i], uncert[i]))
-        end
+    bestfit = HashVector{FitParameter}()
+    for i in 1:length(params)
+        push!(bestfit, wnames[i], FitParameter(pvalues[i], uncert[i]))
+    end
 
-        #modelparams!(model, pvalues)
-        result = FitResult(deepcopy(minimizer), bestfit,
-                           length(c1d_measure),
-                           length(c1d_measure) - length(ifree),
-                           sum(abs2, (c1d_measure .- c1d_results) ./ c1d_uncert),
-                           status, float(Base.time_ns() - elapsedTime) / 1.e9)
-        return result
+    getsetparams!(model, pvalues)
+    result = FitResult(deepcopy(minimizer), bestfit,
+                       length(c1d_measure),
+                       length(c1d_measure) - length(ifree),
+                       sum(abs2, (c1d_measure .- c1d_results) ./ c1d_uncert),
+                       status, float(Base.time_ns() - elapsedTime) / 1.e9)
+    return result
     # catch err
     #     printstyled(color=:red, err)
     #     println()
