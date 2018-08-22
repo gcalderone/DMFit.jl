@@ -66,6 +66,7 @@ test_component(dom, FuncWrap(f, params...), 1000)
     dummy = f(x, params...)
 end
 
+using CMPFit
 result2 = fit!(model2, [data, data2], minimizer=CMPFit.Minimizer())
 
 DMFit.@code_ndim 3
@@ -88,6 +89,9 @@ dom = CartesianDomain(1.:5, [1,2,3,4,5,6.], index=collect(0:4) .* 6 .+ 1)
 dom = CartesianDomain(1.:5, [1,2,3,4,5,6.], index=collect(0:4) .* 6 .+ 1)
 lin = DMFit.flatten(dom)
 
+
+
+
 f(x, y, p1, p2) = @.  p1 * x  +  p2 * y
 
 dom = CartesianDomain(30, 40)
@@ -104,25 +108,27 @@ prepare!(model, dom, :comp1)
 result = fit!(model, data)
 
 
-model = Model(:comp1 => FuncWrap(f, 1, 2))
 model.comp[:comp1].p1.val  = 1   # guess initial value
 model.comp[:comp1].p1.low  = 0.5 # lower limit
 model.comp[:comp1].p1.high = 1.5 # upper limit
 model.comp[:comp1].p2.val  = 2.4
 model.comp[:comp1].p2.fixed = true
-prepare!(model, dom, :comp1)
 result = fit!(model, data, minimizer=CMPFit.Minimizer())
 
 
 
-model = Model(:comp1 => FuncWrap(f, 1, 2))
+model.comp[:comp1].p1.low  = -Inf
+model.comp[:comp1].p1.high = +Inf
+
+
 model.comp[:comp1].p2.expr = "2 * comp1__p1"
 model.comp[:comp1].p2.fixed = true
-prepare!(model, dom, :comp1)
+prepare!(model)
 result = fit!(model, data)
 
 model.comp[:comp1].p2.expr = "comp1__p1 + comp1__p2"
 model.comp[:comp1].p2.fixed = false
+prepare!(model)
 result = fit!(model, data)
 
 

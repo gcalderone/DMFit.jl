@@ -230,6 +230,7 @@ The `DMFit` package uses the [LsqFit](https://github.com/JuliaNLSolvers/LsqFit.j
 
 To use the `CMPFit` minimzer (after having installed the package):
 ```julia
+using CMPFit
 result2 = fit!(model2, [data, data2], minimizer=CMPFit.Minimizer())
 ```
 
@@ -323,28 +324,37 @@ Each model parameter has a few settings that can be tweaked by the user before r
 
 Considering the previous example we can limit the interval for `p1`, and fix the value for `p2` as follows:
 ```julia
-model = Model(:comp1 => FuncWrap(f, 1, 2))
 model.comp[:comp1].p1.val  = 1   # guess initial value
 model.comp[:comp1].p1.low  = 0.5 # lower limit
 model.comp[:comp1].p1.high = 1.5 # upper limit
 model.comp[:comp1].p2.val  = 2.4
 model.comp[:comp1].p2.fixed = true
-prepare!(model, dom, :comp1)
 result = fit!(model, data, minimizer=CMPFit.Minimizer())
 ```
 
+To remove the limits on `p1` simply set their bounds to +/- Inf:
+```julia
+model.comp[:comp1].p1.low  = -Inf
+model.comp[:comp1].p1.high = +Inf
+```
 
 As another example we may constrain `p2` to always be twice the value of `p1`:
 ```julia
-model = Model(:comp1 => FuncWrap(f, 1, 2))
 model.comp[:comp1].p2.expr = "2 * comp1__p1"
 model.comp[:comp1].p2.fixed = true
-prepare!(model, dom, :comp1)
+```
+
+**Important note:** each time you change one (or more) parameter expression(s) you should call `prepare!` passing just the model as argument.  This is required to recompile the model:
+```julia
+prepare!(model)
 result = fit!(model, data)
 ```
-Note that we had to fix the `p2` parameter otherwise the minizer will try to find a best fit for a parameter which has no influence on the final model, since its value will always be overwritten by the expression.  The only situation where the parameter is to be left free is when the expression involve the parameter itself, e.g.:
+Note that in the example above we had to fix the `p2` parameter otherwise the minizer will try to find a best fit for a parameter which has no influence on the final model, since its value will always be overwritten by the expression.  The only situation where the parameter should be left free is when the expression involves the parameter itself, e.g.:
 ```julia
 model.comp[:comp1].p2.expr = "comp1__p1 + comp1__p2"
+model.comp[:comp1].p2.fixed = false
+prepare!(model)
+result = fit!(model, data)
 ```
 
 
