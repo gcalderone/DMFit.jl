@@ -1,11 +1,11 @@
 # DMFit.jl 
 
+`DMFit` is a general purpose Data-driven Model Fitting framework for Julia.
+
 [![Build Status](https://travis-ci.org/gcalderone/DMFit.jl.svg?branch=master)](https://travis-ci.org/gcalderone/DMFit.jl)
 [![Coverage Status](https://coveralls.io/repos/github/gcalderone/DMFit.jl/badge.svg?branch=master)](https://coveralls.io/github/gcalderone/DMFit.jl?branch=master)
 [![codecov](https://codecov.io/gh/gcalderone/DMFit.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/gcalderone/DMFit.jl)
 
-
-`DMFit` is a general purpose Data-driven Model Fitting framework for Julia.
 
 ## Key features
 - it handles data of any dimensionality;

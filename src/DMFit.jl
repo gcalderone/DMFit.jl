@@ -120,21 +120,21 @@ function getparams(comp::T, cname::String="") where T <: AbstractComponent
     (prefix != "")  &&  (prefix *= "__")
     pnames = Vector{String}()
     params = Vector{Parameter}()
+    count = 0
     for pname in fieldnames(typeof(comp))
         isVector = false
         if fieldtype(typeof(comp), pname) == Parameter
             push!(params, getfield(comp, pname))
+            wname = prefix * string(pname)
+            push!(pnames, wname)
         elseif fieldtype(typeof(comp), pname) == Vector{Parameter}
             isVector = true
+            count = 0
             push!(params, getfield(comp, pname)...)
-        else
-            continue
-        end
-
-        for i in 1:length(params)
-            wname = prefix * string(pname)
-            (isVector)  &&  (wname *= string(i))
-            push!(pnames, wname)
+            for j in 1:length(getfield(comp, pname))
+                wname = prefix * string(pname) * string(j)
+                push!(pnames, wname)
+            end
         end
     end
     return (pnames, params)
