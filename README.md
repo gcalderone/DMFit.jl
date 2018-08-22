@@ -351,7 +351,7 @@ model.comp[:comp1].p2.expr = "comp1__p1 + comp1__p2"
 ## Component settings
 A model component can be disabled altoghether and its evaluation fixed to a specific value  by calling `setcompvalue!`, e.g.:
 ```julia
-setcompvalue!(model, :comp1, 10.)
+setcompvalue!(model, :comp1, 10)
 ```
 In further evaluation the `comp1` component will always evaluate to 10.  Note thet the component parameters are completely ignored in this case, so be sure to have at least one free parameter before running the fit.
 
