@@ -4,7 +4,7 @@
 
 `DMFit` is a general purpose Data-driven Model Fitting framework for Julia.
 
-## Key features:
+## Key features
 - it handles data of any dimensionality;
 - the fitting model is evaluated on a user provided (Cartesian or Linear) domain;
 - the fitting model is built up by individual *components*, either provided in the companion package [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
@@ -13,7 +13,7 @@
 - it easily allows to use different minimizers, and compare their results and performances.  Currently two minimizers are supported ([LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl) and [CMPFit](https://github.com/gcalderone/CMPFit.jl));
 - provides several facilities for interactive fitting and results displaying.
 
-## Installation:
+## Installation
 On Julia v0.6:
 ```julia
 Pkg.clone("https://github.com/gcalderone/DMFit.jl.git")
@@ -24,7 +24,7 @@ On Julia v0.7/v1.0:
 ] dev https://github.com/gcalderone/DMFit.jl
 ```
 
-## Simple example:
+## Simple example
 Assume the model to be compared with empirical data has 5 parameters and the foolowing analytical formula:
 ```julia
 f(x, p1, p2, p3, p4, p5) = @. (p1  +  p2 * x  +  p3 * x^2  +  p4 * sin(p5 * x))  *  cos(x)
@@ -197,7 +197,7 @@ To evaluate the model with a different parameter value you can pass one (or more
 ```
 
 
-## The `FuncWrap` and `SimpleParam` components.
+## The `FuncWrap` and `SimpleParam` components
 
 `FuncWrap` and `SimpleParam` are the only built-in components of the `DMFit` package.  Further components are available in the [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) package.
 
