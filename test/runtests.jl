@@ -53,6 +53,8 @@ prepare!(model2, dom, :(calib * ((comp1 + comp2) * comp3)))
 
 result2 = fit!(model2, [data, data2])
 
+resetcounters!(model2)
+
 
 dump(result2)
 

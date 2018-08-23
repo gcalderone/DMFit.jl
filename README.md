@@ -79,6 +79,11 @@ Finally, we are ready to fit the model against empirical data:
 ```julia
 result1 = fit!(model1, data)
 ```
+Note that the `fit!` function modifies the `model1` objects as follows:
+- it updates the model parameter with the best fit ones;
+- it updates the internal cache of component evaluations with those resulting from best fit parameters;
+- it updates the evaluation counter for each component (see below);
+
 The procedure outlined above may seem cumbersome at first, however it is key to define very complex models and to improve performances, as shown below.
 
 
@@ -101,7 +106,10 @@ Now we used 3 components (named `comp1`, `comp2` and `comp3`) and combined them 
 
 Note that we obtained exactly the same result as before, but we **gained a factor ~2** in execution time.  Such perfromance improvement is due to the fact that the component evaluations are internally cached, and are re-evaluated only if necessary, i.e. when one of the parameter value is modified by the minimzer algorithm. In this particular case the `comp3` component, having no free parameter, is evaluated only once.
 
-To check how many time each component and the model are evaluated simply type the name of the `Model` object in the REPL or call the `show` method, i.e.: `show(model2)`, and look at the `Counter` column.
+To check how many time each component and the model are evaluated simply type the name of the `Model` object in the REPL or call the `show` method, i.e.: `show(model2)`, and look at the `Counter` column.  To reset the counters type:
+```julia
+resetcounters!(model2)
+```
 
 
 ## Fitting multiple data sets
