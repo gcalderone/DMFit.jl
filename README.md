@@ -213,7 +213,7 @@ To evaluate the model with a different parameter value you can pass one (or more
 `FuncWrap` and `SimpleParam` are the only built-in components of the `DMFit` package.  Further components are available in the [`DMFit_Basics.jl`](https://github.com/gcalderone/DMFit_Basics.jl) package.
 
 ### `Funcwrap`
-The `FuncWrap` is simply a wrapper to a user defined function of the form `f(x, [y], [z], [further dimensions...], p1, p2, [further parameters...])`.  The `x`, `y`, `z` arguments will be `Vector{Float64}` with the same number of elements, while `p1`, `p2`, etc. will be scalar floats.  The function must return a `Vector{Float64}` with the same number of elements as `x`.  This components works with domains of any dimensionality.
+The `FuncWrap` is simply a wrapper to a user defined function of the form `f(x, [y], [z], [further dimensions...], p1, p2, [further parameters...])`.  The `x`, `y`, `z` arguments will be `Vector{Float64}` with the same number of elements, while `p1`, `p2`, etc. will be scalar floats.  The function must return a `Vector{Float64}` (regardless of thenumber of dimensions) with the same number of elements as `x`.  This components works with domains of any dimensionality.
 
 The constructor is defined as follows:
 ```julia
