@@ -687,7 +687,7 @@ end
 # FuncWrap
 mutable struct FuncWrap <: AbstractComponent
     func::Function
-    param::Vector{Parameter}
+    p::Vector{Parameter}
 end
 
 function FuncWrap(func::Function, args...)
