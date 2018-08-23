@@ -10,7 +10,7 @@
 ## Key features
 - it handles data of any dimensionality;
 - the fitting model is evaluated on a user provided (Cartesian or Linear) domain;
-- the fitting model is built up by individual *components*, either provided by the companion package [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
+- the fitting model is built up by individual *components*, either provided by the companion package [`DMFit_Basics.jl`](https://github.com/gcalderone/DMFit_Basics.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
 - all components results are cached, so that repeated evaluations with the same parameters do not involve further calculations.  This is very important to speed up the fitting process when many components are involved;
 - User provided components can pre-compute quantities based on the model domain before running the fitting process, and store them in a private structure for future re-use;
 - Model parameters can be fixed to a specific value, limited in a interval, or be dynamically calculated using a mathematical expression involving the other parameters;
@@ -210,7 +210,7 @@ To evaluate the model with a different parameter value you can pass one (or more
 
 ## The `FuncWrap` and `SimpleParam` components
 
-`FuncWrap` and `SimpleParam` are the only built-in components of the `DMFit` package.  Further components are available in the [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) package.
+`FuncWrap` and `SimpleParam` are the only built-in components of the `DMFit` package.  Further components are available in the [`DMFit_Basics.jl`](https://github.com/gcalderone/DMFit_Basics.jl) package.
 
 ### `Funcwrap`
 The `FuncWrap` is simply a wrapper to a user defined function of the form `f(x, [y], [z], [further dimensions...], p1, p2, [further parameters...])`.  The `x`, `y`, `z` arguments will be `Vector{Float64}` with the same number of elements, while `p1`, `p2`, etc. will be scalar floats.  The function must return a `Vector{Float64}` with the same number of elements as `x`.  This components works with domains of any dimensionality.
