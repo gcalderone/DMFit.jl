@@ -597,7 +597,7 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     if !support_param_limits(minimizer)
         if  (length(findall(isfinite.(getfield.(params, :low )))) > 0)  ||
             (length(findall(isfinite.(getfield.(params, :high)))) > 0)
-            printstyled(color=:red, bold=true, "Parameter bounds are not supported by " * string(typeof(minimizer)))
+            printstyled(color=:red, bold=true, "Parameter bounds are not supported by " * string(typeof(minimizer)) * "\n")
         end
     end
 
