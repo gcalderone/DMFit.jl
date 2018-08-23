@@ -10,8 +10,10 @@
 ## Key features
 - it handles data of any dimensionality;
 - the fitting model is evaluated on a user provided (Cartesian or Linear) domain;
-- the fitting model is built up by individual *components*, either provided in the companion package [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
+- the fitting model is built up by individual *components*, either provided by the companion package [`DMFit_Components.jl`](https://github.com/gcalderone/DMFit_Components.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
 - all components results are cached, so that repeated evaluations with the same parameters do not involve further calculations.  This is very important to speed up the fitting process when many components are involved;
+- User provided components can pre-compute quantities based on the model domain before running the fitting process, and store them in a private structure for future re-use;
+- Model parameters can be fixed to a specific value, limited in a interval, or be dynamically calculated using a mathematical expression involving the other parameters;
 - it allows fitting multiple data sets;
 - it easily allows to use different minimizers, and compare their results and performances.  Currently two minimizers are supported ([LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl) and [CMPFit](https://github.com/gcalderone/CMPFit.jl));
 - provides several facilities for interactive fitting and results displaying.
@@ -56,7 +58,7 @@ using DMFit
 dom = Domain(x)
 data = Measures(y + noise, 1.)
 ```
-The second argument to the `Measures` function is the (1 sigma Gaussian) uncertainty associated to each data sample.  It can either be an array with the same shape as the first argument or a scalar.  In the latter case all data samples will have the same uncertainty.
+The second argument to the `Measures` function is the (1 sigma Gaussian) uncertainty associated to each data sample.  It can either be an array with the same shape as the first argument or a scalar.  In the latter case all data samples are assumed to have the same uncertainty.
 
 Also, we must create a `Model` object containing a reference to the analytical formula, and prepare it for evaluation on the domain `dom`
 ```julia
@@ -67,8 +69,8 @@ The `comp1` symbol is the name we chose to identify the component in the model. 
 
 The parameter initial values are those given in the component constructors.  Such values can be changed as follows:
 ```julia
-model1[:comp1].param[1].val = 1
-model1[:comp1].param[2].val = 1.e-3
+model1[:comp1].p[1].val = 1
+model1[:comp1].p[2].val = 1.e-3
  ```
  etc.
 
@@ -77,8 +79,6 @@ Finally, we are ready to fit the model against empirical data:
 ```julia
 result1 = fit!(model1, data)
 ```
-Note that all the objects created so far (i.e. `dom`, `data`, `model1` and `result1`) have a dedicated `show` method to quickly and easily inspect their contents.
-
 The procedure outlined above may seem cumbersome at first, however it is key to define very complex models and to improve performances, as shown below.
 
 
@@ -170,10 +170,10 @@ From this structure the user can retrieve the parameter best fit values and unce
 
 In particular, the best fit value and uncertanty for `p1` can be retrieved as follows:
 ```julia
-println(result2.param[:comp1__param1].val)
-println(result2.param[:comp1__param1].unc)
+println(result2.param[:comp1__p1].val)
+println(result2.param[:comp1__p1].unc)
 ```
-Note that the parameter is identified by using both the component name and parameter name, separated by a double underscore `__`.prepending the 
+Note that the parameter is identified by using both the component name and parameter name, separated by a double underscore `__`.
 
 To plot the results use the following arrays:
 - Abscissa: `dom[1]`.  For multi dimensional domains you can use `dom[2]`, `dom[3]`, etc.;
@@ -310,6 +310,14 @@ prepare!(model, dom, :comp1)
 result = fit!(model, data)
 ```
 
+## Interactive Use
+`DMFit.jl` provides several facilities for interactive use on the REPL:
+- all the types (i.e. `Domain`, `Measures`, `Model` and `FitResult`) have a dedicated `show` method to quickly and easily inspect their contents.  Simply type the name of the object to run this method; 
+- To get the list of currently defined components in a model simply type `model[:<TAB>`;
+- To get a list of parameter for a component simply type `model[:<COMPONENT NAME>]`, e.g. `model[:comp1]`.  Remember that the component parameter can either be scalar `Parameter` or `Vector{Parameter}`.  In the latter case the parameter name shown in the REPL has an integer index appended;
+- To get the list of model parameter in a result simply type `result.param[:<TAB>`;
+
+
 
 ## Parameter settings
 Each model parameter has a few settings that can be tweaked by the user before running the actul fit:
@@ -323,24 +331,24 @@ Each model parameter has a few settings that can be tweaked by the user before r
 
 Considering the previous example we can limit the interval for `p1`, and fix the value for `p2` as follows:
 ```julia
-model.comp[:comp1].param[1].val  = 1   # guess initial value
-model.comp[:comp1].param[1].low  = 0.5 # lower limit
-model.comp[:comp1].param[1].high = 1.5 # upper limit
-model.comp[:comp1].param[2].val  = 2.4
-model.comp[:comp1].param[2].fixed = true
+model.comp[:comp1].p[1].val  = 1   # guess initial value
+model.comp[:comp1].p[1].low  = 0.5 # lower limit
+model.comp[:comp1].p[1].high = 1.5 # upper limit
+model.comp[:comp1].p[2].val  = 2.4
+model.comp[:comp1].p[2].fixed = true
 result = fit!(model, data, minimizer=CMPFit.Minimizer())
 ```
 
 To remove the limits on `p1` simply set their bounds to +/- Inf:
 ```julia
-model.comp[:comp1].param[1].low  = -Inf
-model.comp[:comp1].param[1].high = +Inf
+model.comp[:comp1].p[1].low  = -Inf
+model.comp[:comp1].p[1].high = +Inf
 ```
 
 As another example we may constrain `p2` to always be twice the value of `p1`:
 ```julia
-model.comp[:comp1].param[2].expr = "comp1__param1 + comp1__param2"
-model.comp[:comp1].param[2].fixed = false
+model.comp[:comp1].p[2].expr = "comp1__p1 + comp1__p2"
+model.comp[:comp1].p[2].fixed = false
 ```
 
 **Important note:** each time you change one (or more) parameter expression(s) you should call `prepare!` passing just the model as argument.  This is required to recompile the model:

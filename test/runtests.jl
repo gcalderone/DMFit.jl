@@ -28,8 +28,8 @@ data = Measures(y + noise, 1.)
 model1 = Model(:comp1 => FuncWrap(f, params...))
 prepare!(model1, dom, :comp1)
 
-model1[:comp1].param[1].val = 1
-model1[:comp1].param[2].val = 1.e-3
+model1[:comp1].p[1].val = 1
+model1[:comp1].p[2].val = 1.e-3
 
 result1 = fit!(model1, data)
 
@@ -56,8 +56,8 @@ result2 = fit!(model2, [data, data2])
 
 dump(result2)
 
-println(result2.param[:comp1__param1].val)
-println(result2.param[:comp1__param1].unc)
+println(result2.param[:comp1__p1].val)
+println(result2.param[:comp1__p1].unc)
 
 
 test_component(dom, FuncWrap(f, params...), 1000)
@@ -105,26 +105,26 @@ prepare!(model, dom, :comp1)
 result = fit!(model, data)
 
 
-model.comp[:comp1].param[1].val  = 1   # guess initial value
-model.comp[:comp1].param[1].low  = 0.5 # lower limit
-model.comp[:comp1].param[1].high = 1.5 # upper limit
-model.comp[:comp1].param[2].val  = 2.4
-model.comp[:comp1].param[2].fixed = true
+model.comp[:comp1].p[1].val  = 1   # guess initial value
+model.comp[:comp1].p[1].low  = 0.5 # lower limit
+model.comp[:comp1].p[1].high = 1.5 # upper limit
+model.comp[:comp1].p[2].val  = 2.4
+model.comp[:comp1].p[2].fixed = true
 result = fit!(model, data)
 
 
 
-model.comp[:comp1].param[1].low  = -Inf
-model.comp[:comp1].param[1].high = +Inf
+model.comp[:comp1].p[1].low  = -Inf
+model.comp[:comp1].p[1].high = +Inf
 
 
-model.comp[:comp1].param[2].expr = "2 * comp1__param1"
-model.comp[:comp1].param[2].fixed = true
+model.comp[:comp1].p[2].expr = "2 * comp1__p1"
+model.comp[:comp1].p[2].fixed = true
 prepare!(model)
 result = fit!(model, data)
 
-model.comp[:comp1].param[2].expr = "comp1__param1 + comp1__param2"
-model.comp[:comp1].param[2].fixed = false
+model.comp[:comp1].p[2].expr = "comp1__p1 + comp1__p2"
+model.comp[:comp1].p[2].fixed = false
 prepare!(model)
 result = fit!(model, data)
 
