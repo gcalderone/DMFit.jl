@@ -1,4 +1,4 @@
-struct HashVector{T} # <: Associative{Symbol,T}
+struct HashVector{T}  <: AbstractDict{Symbol, T}
     keys::Vector{Symbol}
     values::Vector{T}
 end
