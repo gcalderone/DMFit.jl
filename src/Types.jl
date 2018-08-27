@@ -26,14 +26,14 @@ end
 
 
 macro code_ndim(ndim::Int, importf=true)
-    prefix = (importf  ?  "DMFit."  :  "")
+    prefix = (importf  ?  "ModelFit."  :  "")
     
     @assert ndim >= 1 "Number of dimensions must be >= 1"
     out = Expr(:block)
 
     if importf
         s = Vector{String}()
-        push!(s, "import DMFit.Domain, DMFit.flatten, DMFit.Measures, DMFit.Counts, DMFit.evaluate!")
+        push!(s, "import ModelFit.Domain, ModelFit.flatten, ModelFit.Measures, ModelFit.Counts, ModelFit.evaluate!")
         push!(out.args, Meta_parse(join(s, "\n")))
     end
 
@@ -41,7 +41,7 @@ macro code_ndim(ndim::Int, importf=true)
     if ndim > 1
         s = Vector{String}()
         if importf
-            push!(s, "import DMFit.CartesianDomain")
+            push!(s, "import ModelFit.CartesianDomain")
             push!(out.args, Meta_parse(join(s, "\n")))
         end
         
@@ -486,7 +486,7 @@ function show(stream::IO, model::Model)
         color = circshift(color, 1)
 
         ctype = split(string(typeof(comp)), ".")
-        if ctype[1] == "DMFit"
+        if ctype[1] == "ModelFit"
             ctype = ctype[2:end]
         end
         ctype = join(ctype[2:end], ".")
@@ -698,4 +698,4 @@ function FuncWrap(func::Function, args...)
     return FuncWrap(func, params)
 end
 
-compdata(domain::DMFit.AbstractDomain, comp::FuncWrap) = FuncWrap_cdata(comp.func)
+compdata(domain::ModelFit.AbstractDomain, comp::FuncWrap) = FuncWrap_cdata(comp.func)

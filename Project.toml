@@ -1,6 +1,6 @@
 authors = ["Giorgio Calderone <giorgio.calderone@gmail.com>"]
-name = "DMFit"
-uuid = "e0132474-a57f-11e8-3de2-55cf349ffca1"
+name = "ModelFit"
+uuid = "96d1805a-aa3c-11e8-024c-e7dc78b97712"
 version = "0.1.0"
 
 [deps]

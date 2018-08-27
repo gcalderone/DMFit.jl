@@ -21,7 +21,7 @@ y = f(x, params...);
 rng = MersenneTwister(0);
 noise = randn(rng, length(x));
 
-using DMFit
+using ModelFit
 dom = Domain(x)
 data = Measures(y + noise, 1.)
 
@@ -68,7 +68,7 @@ test_component(dom, FuncWrap(f, params...), 1000)
 end
 
 
-DMFit.@code_ndim 3
+ModelFit.@code_ndim 3
 
 # 1D
 dom = Domain(5)
@@ -86,7 +86,7 @@ dom = CartesianDomain(1.:5, [1,2,3,4,5,6.])
 dom = CartesianDomain(1.:5, [1,2,3,4,5,6.], index=collect(0:4) .* 6 .+ 1)
 
 dom = CartesianDomain(1.:5, [1,2,3,4,5,6.], index=collect(0:4) .* 6 .+ 1)
-lin = DMFit.flatten(dom)
+lin = ModelFit.flatten(dom)
 
 
 

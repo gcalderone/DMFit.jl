@@ -77,7 +77,7 @@ end
 
 #=
 if false
-    a = DMFit.HashVector{Float64}()
+    a = ModelFit.HashVector{Float64}()
     push!(a, :a, 1.2)
     push!(a, :b, 1.2)
     a[:a]
@@ -88,10 +88,10 @@ if false
     a[:a]
     a[1]
 
-    a = DMFit.HashVector{Float64}(:a => 1.3)
+    a = ModelFit.HashVector{Float64}(:a => 1.3)
     a[:a]
 
-    a = DMFit.HashVector{Float64}(:a => 1.3, :b=>2.4, :c=>3.6)
+    a = ModelFit.HashVector{Float64}(:a => 1.3, :b=>2.4, :c=>3.6)
     a[:a]
     a
 

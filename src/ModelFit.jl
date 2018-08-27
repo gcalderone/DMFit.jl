@@ -1,6 +1,6 @@
 __precompile__(true)
 
-module DMFit
+module ModelFit
 
 @inline oldver() = (VERSION < v"0.7.0")
 
