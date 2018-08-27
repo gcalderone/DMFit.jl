@@ -1,6 +1,6 @@
 # ModelFit.jl 
 
-`ModelFit` is a general purpose Data-driven Model Fitting framework for Julia.
+`ModelFit` is a general purpose data-driven model fitting framework for Julia.
 
 [![Build Status](https://travis-ci.org/gcalderone/ModelFit.jl.svg?branch=master)](https://travis-ci.org/gcalderone/ModelFit.jl)
 [![Coverage Status](https://coveralls.io/repos/github/gcalderone/ModelFit.jl/badge.svg?branch=master)](https://coveralls.io/github/gcalderone/ModelFit.jl?branch=master)
