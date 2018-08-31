@@ -3,10 +3,9 @@
 `DataFitting` is a general purpose data-driven model fitting framework for Julia.
 
 [![Build Status](https://travis-ci.org/gcalderone/DataFitting.jl.svg?branch=master)](https://travis-ci.org/gcalderone/DataFitting.jl)
-[![Coverage Status](https://coveralls.io/repos/github/gcalderone/DataFitting.jl/badge.svg?branch=master)](https://coveralls.io/github/gcalderone/DataFitting.jl?branch=master)
-[![codecov](https://codecov.io/gh/gcalderone/DataFitting.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/gcalderone/DataFitting.jl)
 
 (works both on Julia v0.6 and v0.7/1.0)
+
 (previous name of this package was ModelFit.jl)
 
 ## Key features
