@@ -1,16 +1,16 @@
-# ModelFit.jl 
+# DataFitting.jl 
 
-`ModelFit` is a general purpose data-driven model fitting framework for Julia.
+`DataFitting` is a general purpose data-driven model fitting framework for Julia.
 
-[![Build Status](https://travis-ci.org/gcalderone/ModelFit.jl.svg?branch=master)](https://travis-ci.org/gcalderone/ModelFit.jl)
-[![Coverage Status](https://coveralls.io/repos/github/gcalderone/ModelFit.jl/badge.svg?branch=master)](https://coveralls.io/github/gcalderone/ModelFit.jl?branch=master)
-[![codecov](https://codecov.io/gh/gcalderone/ModelFit.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/gcalderone/ModelFit.jl)
+[![Build Status](https://travis-ci.org/gcalderone/DataFitting.jl.svg?branch=master)](https://travis-ci.org/gcalderone/DataFitting.jl)
+[![Coverage Status](https://coveralls.io/repos/github/gcalderone/DataFitting.jl/badge.svg?branch=master)](https://coveralls.io/github/gcalderone/DataFitting.jl?branch=master)
+[![codecov](https://codecov.io/gh/gcalderone/DataFitting.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/gcalderone/DataFitting.jl)
 
 
 ## Key features
 - it handles data of any dimensionality;
 - the fitting model is evaluated on a user provided (Cartesian or Linear) domain;
-- the fitting model is built up by individual *components*, either provided by the companion package [`ModelFitBasics.jl`](https://github.com/gcalderone/ModelFitBasics.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
+- the fitting model is built up by individual *components*, either provided by the companion package [`DataFittingBasics.jl`](https://github.com/gcalderone/DataFittingBasics.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
 - all components results are cached, so that repeated evaluations with the same parameters do not involve further calculations.  This is very important to speed up the fitting process when many components are involved;
 - User provided components can pre-compute quantities based on the model domain before running the fitting process, and store them in a private structure for future re-use;
 - Model parameters can be fixed to a specific value, limited in a interval, or be dynamically calculated using a mathematical expression involving the other parameters;
@@ -21,12 +21,12 @@
 ## Installation
 On Julia v0.6:
 ```julia
-Pkg.clone("https://github.com/gcalderone/ModelFit.jl.git")
+Pkg.clone("https://github.com/gcalderone/DataFitting.jl.git")
 ```
 
 On Julia v0.7/v1.0:
 ```julia
-] dev https://github.com/gcalderone/ModelFit.jl
+] dev https://github.com/gcalderone/DataFitting.jl
 ```
 
 ## Simple example
@@ -52,9 +52,9 @@ rng = MersenneTwister(0);
 noise = randn(rng, length(x));
 ```
 
-In order to use the `ModelFit` framework we must create a `Domain` and a `Measures` objects to encapsulate the model domain and empirical data:
+In order to use the `DataFitting` framework we must create a `Domain` and a `Measures` objects to encapsulate the model domain and empirical data:
 ```julia
-using ModelFit
+using DataFitting
 dom = Domain(x)
 data = Measures(y + noise, 1.)
 ```
@@ -113,7 +113,7 @@ resetcounters!(model2)
 
 
 ## Fitting multiple data sets
-`ModelFit` allows to fit multiple data sets simultaneously.
+`DataFitting` allows to fit multiple data sets simultaneously.
 
 Suppose you observe the same phenomenon with two different instruments and wish to use both data sets to constrain the model parameters.  Here we will simulate a second data sets by adding random noise to the previously calculated model, and creating a second `Measures` object: 
 ```julia
@@ -139,9 +139,9 @@ result2 = fit!(model2, [data, data2])
 The results of the fitting are available as a `FitResult` structure, as returned by the `fit!` fuction.  The structure dump for the `result2` in the example above is as follows:
 ```julia
 dump(result2)
-ModelFit.FitResult
-  fitter: ModelFit.Minimizer ModelFit.Minimizer()
-  param: ModelFit.HashVector{ModelFit.FitParameter}
+DataFitting.FitResult
+  fitter: DataFitting.Minimizer DataFitting.Minimizer()
+  param: DataFitting.HashVector{DataFitting.FitParameter}
     keys: Array{Symbol}((6,))
       1: Symbol comp1__p1
       2: Symbol comp1__p2
@@ -149,23 +149,23 @@ ModelFit.FitResult
       4: Symbol comp2__p1
       5: Symbol comp2__p2
       6: Symbol calib__val
-    values: Array{ModelFit.FitParameter}((6,))
-      1: ModelFit.FitParameter
+    values: Array{DataFitting.FitParameter}((6,))
+      1: DataFitting.FitParameter
         val: Float64 1.0034771773408524
         unc: Float64 0.0029174421450895533
-      2: ModelFit.FitParameter
+      2: DataFitting.FitParameter
         val: Float64 0.0010022369285940917
         unc: Float64 1.3473265492873467e-6
-      3: ModelFit.FitParameter
+      3: DataFitting.FitParameter
         val: Float64 9.996494571427457e-7
         unc: Float64 1.3148179368867407e-10
-      4: ModelFit.FitParameter
+      4: DataFitting.FitParameter
         val: Float64 4.005022216534921
         unc: Float64 0.0013760967902191378
-      5: ModelFit.FitParameter
+      5: DataFitting.FitParameter
         val: Float64 4.999999879104177
         unc: Float64 5.998373321161513e-8
-      6: ModelFit.FitParameter
+      6: DataFitting.FitParameter
         val: Float64 1.299996982192236
         unc: Float64 4.979637254678212e-5
   ndata: Int64 399962
@@ -210,7 +210,7 @@ To evaluate the model with a different parameter value you can pass one (or more
 
 ## The `FuncWrap` and `SimpleParam` components
 
-`FuncWrap` and `SimpleParam` are the only built-in components of the `ModelFit` package.  Further components are available in the [`ModelFitBasics.jl`](https://github.com/gcalderone/ModelFitBasics.jl) package.
+`FuncWrap` and `SimpleParam` are the only built-in components of the `DataFitting` package.  Further components are available in the [`DataFittingBasics.jl`](https://github.com/gcalderone/DataFittingBasics.jl) package.
 
 ### `Funcwrap`
 The `FuncWrap` is simply a wrapper to a user defined function of the form `f(x, [y], [z], [further dimensions...], p1, p2, [further parameters...])`.  The `x`, `y`, `z` arguments will be `Vector{Float64}` with the same number of elements, while `p1`, `p2`, etc. will be scalar floats.  The function must return a `Vector{Float64}` (regardless of thenumber of dimensions) with the same number of elements as `x`.  This components works with domains of any dimensionality.
@@ -237,7 +237,7 @@ The parameters are:
 
 
 ## Profile a component
-The `ModelFit` framework provides an effective way to check a component performance by means of the `test_component` function.
+The `DataFitting` framework provides an effective way to check a component performance by means of the `test_component` function.
 
 For instance, you may wonder if the `FuncWrap` component used in the previous example as a wrapper to the `f` function introduces any performance penalty.  With `test_component` you may simply compare the wrapper performance with that of a simple loop, i.e.:
 ```julia
@@ -252,7 +252,7 @@ As you can see there is no significant difference in looping 1000 times on model
 
 ## Using the `CMPFit` minimizer
 
-The `ModelFit` package uses the [LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl) minimizer by default, but it allows to use the [CMPFit](https://github.com/gcalderone/CMPFit.jl) as well.  The latter typically provides better performances with respect to the former, but since `CMPFit` is a wrapper to a C library it is not a pure-Julia solution.   The better performances are due to a different minimization strategy, not to C vs. Julia differences.
+The `DataFitting` package uses the [LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl) minimizer by default, but it allows to use the [CMPFit](https://github.com/gcalderone/CMPFit.jl) as well.  The latter typically provides better performances with respect to the former, but since `CMPFit` is a wrapper to a C library it is not a pure-Julia solution.   The better performances are due to a different minimization strategy, not to C vs. Julia differences.
 
 To use the `CMPFit` minimzer (after having installed the package):
 ```julia
@@ -263,9 +263,9 @@ result2 = fit!(model2, [data, data2], minimizer=CMPFit.Minimizer())
 
 ## Multidimensional domains
 
-**IMPORTANT NOTE**: by default `the `ModelFit` package defines structure only for 1D and 2D fitting.  To handle higher dimensional cases you should generate the appropriate code with, e.g.:
+**IMPORTANT NOTE**: by default `the `DataFitting` package defines structure only for 1D and 2D fitting.  To handle higher dimensional cases you should generate the appropriate code with, e.g.:
 ```julia
-ModelFit.@code_ndim 3
+DataFitting.@code_ndim 3
 ```
 
 `N`-dimensional `Domain` objects comes in two flavours: linear and cartesian ones:
@@ -300,10 +300,10 @@ dom = CartesianDomain(1.:5, [1,2,3,4,5,6.], index=collect(0:4) .* 6 .+ 1)
 The length of such domain is 5, equal to the length of the vector passed as `index` keyword.
 
 
-A cartesian domain can always be transformed into a linear domain, while the inverse is usually not possible.  To check how a "flattened" version of a cartesian domain looks like you can use the `ModelFit.flatten` function, i.e.:
+A cartesian domain can always be transformed into a linear domain, while the inverse is usually not possible.  To check how a "flattened" version of a cartesian domain looks like you can use the `DataFitting.flatten` function, i.e.:
 ```julia
 dom = CartesianDomain(1.:5, [1,2,3,4,5,6.], index=collect(0:4) .* 6 .+ 1)
-lin = ModelFit.flatten(dom)
+lin = DataFitting.flatten(dom)
 ```
 Actually, all models are always evaluated on "flattened", i.e. linear, domains.
 
@@ -338,7 +338,7 @@ result = fit!(model, data)
 ```
 
 ## Interactive Use
-`ModelFit.jl` provides several facilities for interactive use on the REPL:
+`DataFitting.jl` provides several facilities for interactive use on the REPL:
 - all the types (i.e. `Domain`, `Measures`, `Model` and `FitResult`) have a dedicated `show` method to quickly and easily inspect their contents.  Simply type the name of the object to run this method; 
 - To get the list of currently defined components in a model simply type `model[:<TAB>`;
 - To get a list of parameter for a component simply type `model[:<COMPONENT NAME>]`, e.g. `model[:comp1]`.  Remember that the component parameter can either be scalar `Parameter` or `Vector{Parameter}`.  In the latter case the parameter name shown in the REPL has an integer index appended;

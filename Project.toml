@@ -1,5 +1,5 @@
 authors = ["Giorgio Calderone <giorgio.calderone@gmail.com>"]
-name = "ModelFit"
+name = "DataFitting"
 uuid = "96d1805a-aa3c-11e8-024c-e7dc78b97712"
 version = "0.1.0"
 

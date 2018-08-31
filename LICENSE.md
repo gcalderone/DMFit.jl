@@ -1,4 +1,4 @@
-The ModelFit.jl package is licensed under the MIT "Expat" License:
+The DataFitting.jl package is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2018: Giorgio Calderone.
 >
