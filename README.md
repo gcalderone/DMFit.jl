@@ -348,14 +348,14 @@ result = fit!(model, data)
 
 
 ## Parameter settings
-Each model parameter has a few settings that can be tweaked by the user before running the actul fit:
+Each model parameter has a few settings that can be tweaked by the user before running the actual fit:
 - `.val` (float): guess initial value;
 - `.low` (float): lower limit for the value (default: `-Inf`);
 - `.high` (float): upper limit for the value (default: `+Inf`);
 - `.fixed` (bool): false for free parameters, true for fixed ones (default: `false`);
 - `.expr` (string): a mathematical expression to bind the parameter value to other parameters (default: `""`);
 
-**Important note**: the default minimizer ([LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl) do not supports bounded parameters, while  [CMPFit](https://github.com/gcalderone/CMPFit.jl)) supports them.
+**Important note**: the default minimizer ([LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl)) do not supports bounded parameters, while  [CMPFit](https://github.com/gcalderone/CMPFit.jl) supports them.
 
 Considering the previous example we can limit the interval for `p1`, and fix the value for `p2` as follows:
 ```julia
