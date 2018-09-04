@@ -22,12 +22,12 @@
 ## Installation
 On Julia v0.6:
 ```julia
-Pkg.clone("https://github.com/gcalderone/DataFitting.jl.git")
+Pkg.add("DataFitting.jl")
 ```
 
 On Julia v0.7/v1.0:
 ```julia
-] dev https://github.com/gcalderone/DataFitting.jl
+] add DataFitting
 ```
 
 ## Simple example
