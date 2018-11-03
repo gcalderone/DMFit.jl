@@ -211,9 +211,9 @@ macro code_ndim(ndim::Int, importf=true)
 
     s = Vector{String}()
     push!(s, "function Measures(measure::Array{Float64, $(ndim)}, uncert::Float64=one(Float64))")
-    push!(s, "    e = similar(measure)")
-    push!(s, "    fill!(e, uncert)")
-    push!(s, "    Measures_$(ndim)D(measure, e)")
+    push!(s, "    u = similar(measure)")
+    push!(s, "    fill!(u, uncert)")
+    push!(s, "    Measures_$(ndim)D(measure, u)")
     push!(s, "end")
     push!(out.args, Meta_parse(join(s, "\n")))
 
