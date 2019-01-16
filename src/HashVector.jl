@@ -57,22 +57,16 @@ function getindex(v::HashVector{T}, key::Symbol) where T
 end
 
 
-if oldver()
-    start(v::HashVector{T}) where T = 1
-    next(v::HashVector{T}, i::Int) where T = (Pair(v.keys[i], v.values[i]), i + 1)
-    done(v::HashVector{T}, i::Int) where T = (i > length(v.values))
-else
-    function iterate(v::HashVector{T}) where T
-        (length(v.values) == 0)  &&  (return nothing)
-        i = 1
-        return (Pair(v.keys[i], v.values[i]), i)
-    end
+function iterate(v::HashVector{T}) where T
+    (length(v.values) == 0)  &&  (return nothing)
+    i = 1
+    return (Pair(v.keys[i], v.values[i]), i)
+end
 
-    function iterate(v::HashVector{T}, i::Int) where T
-        (length(v.values) <= i)  &&  (return nothing)
-        i += 1
-        return (Pair(v.keys[i], v.values[i]), i)
-    end
+function iterate(v::HashVector{T}, i::Int) where T
+    (length(v.values) <= i)  &&  (return nothing)
+    i += 1
+    return (Pair(v.keys[i], v.values[i]), i)
 end
 
 #=

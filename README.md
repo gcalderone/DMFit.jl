@@ -4,10 +4,6 @@
 
 [![Build Status](https://travis-ci.org/gcalderone/DataFitting.jl.svg?branch=master)](https://travis-ci.org/gcalderone/DataFitting.jl)
 
-(works both on Julia v0.6 and v0.7/1.0)
-
-(previous name of this package was ModelFit.jl)
-
 ## Key features
 - it handles data of any dimensionality;
 - the fitting model is evaluated on a user provided (Cartesian or Linear) domain;
@@ -31,7 +27,7 @@ On Julia v0.7/v1.0:
 ```
 
 ## Simple example
-Assume the model to be compared with empirical data has 5 parameters and the foolowing analytical formula:
+Assume the model to be compared with empirical data has 5 parameters and the following analytical formula:
 ```julia
 f(x, p1, p2, p3, p4, p5) = @. (p1  +  p2 * x  +  p3 * x^2  +  p4 * sin(p5 * x))  *  cos(x)
 ```
@@ -43,12 +39,13 @@ To simulate a measurement process we'll evaluate the model on a domain and add s
 params = [1, 1.e-3, 1.e-6, 4, 5]
 
 # Domain for model evaluation
-x = 1:0.05:10000
+x = 1.:50:10000
 
 # Evaluated model
 y = f(x, params...);
 
 # Random noise
+using Random
 rng = MersenneTwister(0);
 noise = randn(rng, length(x));
 ```
@@ -57,7 +54,7 @@ In order to use the `DataFitting` framework we must create a `Domain` and a `Mea
 ```julia
 using DataFitting
 dom = Domain(x)
-data = Measures(y + noise, 1.)
+data = Measures(y .+ noise, 1.)
 ```
 The second argument to the `Measures` function is the (1 sigma Gaussian) uncertainty associated to each data sample.  It can either be an array with the same shape as the first argument or a scalar.  In the latter case all data samples are assumed to have the same uncertainty.
 
@@ -197,7 +194,8 @@ To plot the results use the following arrays:
 In the following example I will use the [Gnuplot.jl](https://github.com/gcalderone/Gnuplot.jl) package, but the user can choose any other package:
 ```julia
 using Gnuplot
-@gp xr=(1000, 1010) :-
+@gp "set key left" :-
+@gp :- dom[1] data2.measure "w p tit 'Data'" :-
 @gp :- dom[1] model2(:comp1) "w l tit 'comp1'" :-
 @gp :- dom[1] model2(:comp2) "w l tit 'comp2'" :-
 @gp :- dom[1] model2() "w lines tit 'Model' lw 3"

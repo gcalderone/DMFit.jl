@@ -34,7 +34,7 @@ macro code_ndim(ndim::Int, importf=true)
     if importf
         s = Vector{String}()
         push!(s, "import DataFitting.Domain, DataFitting.flatten, DataFitting.Measures, DataFitting.Counts, DataFitting.evaluate!")
-        push!(out.args, Meta_parse(join(s, "\n")))
+        push!(out.args, Meta.parse(join(s, "\n")))
     end
 
     # Structure def.
@@ -42,7 +42,7 @@ macro code_ndim(ndim::Int, importf=true)
         s = Vector{String}()
         if importf
             push!(s, "import DataFitting.CartesianDomain")
-            push!(out.args, Meta_parse(join(s, "\n")))
+            push!(out.args, Meta.parse(join(s, "\n")))
         end
         
         s = Vector{String}()
@@ -51,21 +51,21 @@ macro code_ndim(ndim::Int, importf=true)
         push!(s, "  size::NTuple{$(ndim), Int}")
         push!(s, "  index::Vector{Int}")
         push!(s, "end")
-        push!(out.args, Meta_parse(join(s, "\n")))
+        push!(out.args, Meta.parse(join(s, "\n")))
 
         # size
         s = "Base.size(dom::CartesianDomain_$(ndim)D) = dom.size"
-        push!(out.args, Meta_parse(s))
+        push!(out.args, Meta.parse(s))
         s = "Base.size(dom::CartesianDomain_$(ndim)D, dim::Int) = dom.size[dim]"
-        push!(out.args, Meta_parse(s))
+        push!(out.args, Meta.parse(s))
 
         # ndims
         s = "Base.ndims(dom::CartesianDomain_$(ndim)D) = $ndim"
-        push!(out.args, Meta_parse(s))
+        push!(out.args, Meta.parse(s))
 
         # getindex
         s = "Base.getindex(dom::CartesianDomain_$(ndim)D, dim::Int) = dom.d[dim]"
-        push!(out.args, Meta_parse(s))
+        push!(out.args, Meta.parse(s))
 
         # Constructors
         a = Vector{String}()
@@ -81,7 +81,7 @@ macro code_ndim(ndim::Int, importf=true)
             push!(c, "length(d$(i))")
         end
         s = "CartesianDomain(" * join(a, ", ") * "; index=1:" * join(c, " * ") * ") = CartesianDomain_$(ndim)D([" * join(b, ", ") * "], (" * join(c, ", ") * ",), index)"
-        push!(out.args, Meta_parse(s))
+        push!(out.args, Meta.parse(s))
 
 
         a = Vector{String}()
@@ -97,7 +97,7 @@ macro code_ndim(ndim::Int, importf=true)
             push!(c, "n$(i)")
         end
         s = "CartesianDomain(" * join(a, ", ") * "; index=1:" * join(c, " * ") * ") = CartesianDomain(" * join(b, ", ") * ", index=index)"
-        push!(out.args, Meta_parse(s))
+        push!(out.args, Meta.parse(s))
     end
 
     # Structure def.
@@ -112,11 +112,11 @@ macro code_ndim(ndim::Int, importf=true)
     push!(s, "  vmax::Vector{Float64}")
     push!(s, "  length::Int")
     push!(s, "end")
-    push!(out.args, Meta_parse(join(s, "\n")))
+    push!(out.args, Meta.parse(join(s, "\n")))
 
     # ndims
     s = "Base.ndims(dom::Domain_$(ndim)D) = $ndim"
-    push!(out.args, Meta_parse(s))
+    push!(out.args, Meta.parse(s))
 
     # getindex
     if ndim == 1
@@ -124,7 +124,7 @@ macro code_ndim(ndim::Int, importf=true)
     else
         s = "Base.getindex(dom::Domain_$(ndim)D, dim::Int) = dom.d[dim,:]"
     end
-    push!(out.args, Meta_parse(s))
+    push!(out.args, Meta.parse(s))
 
     # Constructors
     a = Vector{String}()
@@ -149,7 +149,7 @@ macro code_ndim(ndim::Int, importf=true)
         "[" * join("maximum(" .* c .* ")", ", ") * "], " *
         "length(d1))\n"
     s *= "end"
-    push!(out.args, Meta_parse(s))
+    push!(out.args, Meta.parse(s))
 
     a = Vector{String}()
     for i in 1:ndim
@@ -160,27 +160,18 @@ macro code_ndim(ndim::Int, importf=true)
         push!(b, "one(Float64):one(Float64):n$(i)")
     end
     s = "Domain(" * join(a, ", ") * ") = Domain(" * join(b, ", ") * ")"
-    push!(out.args, Meta_parse(s))
-
+    push!(out.args, Meta.parse(s))
 
     # flatten
     if ndim > 1
         s = "function flatten(dom::CartesianDomain_$(ndim)D)::Domain_$(ndim)D\n"
-        if oldver()
-            s *= "  out = Matrix{Float64}(       $ndim, length(dom))\n"
-        else
-            s *= "  out = Matrix{Float64}(undef, $ndim, length(dom))\n"
-        end
+        s *= "  out = Matrix{Float64}(undef, $ndim, length(dom))\n"
         s *= "  for i in 1:length(dom)\n"
         a = Vector{String}()
         for i in 1:ndim
             push!(a, "d$(i)")
         end
-        if oldver()
-            s *= "  (" * join(a, ", ") * ") = ind2sub(size(dom), dom.index[i])\n"
-        else
-            s *= "  (" * join(a, ", ") * ") = Tuple(CartesianIndices(size(dom))[dom.index[i]])\n"
-        end
+        s *= "  (" * join(a, ", ") * ") = Tuple(CartesianIndices(size(dom))[dom.index[i]])\n"
         for i in 1:ndim
             s *= "  out[$i, i] = dom.d[$i][d$(i)]\n"
         end
@@ -192,7 +183,7 @@ macro code_ndim(ndim::Int, importf=true)
         s *= "  return Domain(" * join(a, ", ") * ")\n"
 
         s *= "end\n"
-        push!(out.args, Meta_parse(s))
+        push!(out.args, Meta.parse(s))
     end
 
     s = Vector{String}()
@@ -200,14 +191,14 @@ macro code_ndim(ndim::Int, importf=true)
     push!(s, "  measure::Array{Float64, $(ndim)}")
     push!(s, "  uncert::Array{Float64, $(ndim)}")
     push!(s, "end")
-    push!(out.args, Meta_parse(join(s, "\n")))
+    push!(out.args, Meta.parse(join(s, "\n")))
 
     s = Vector{String}()
     push!(s, "  function Measures(measure::Array{Float64, $(ndim)}, uncert::Array{Float64, $(ndim)})")
     push!(s, "      @assert length(measure) == length(uncert) \"Measure and uncertainty arrays must have same size\"")
     push!(s, "      $(prefix)Measures_$(ndim)D(measure, uncert)")
     push!(s, "  end")
-    push!(out.args, Meta_parse(join(s, "\n")))
+    push!(out.args, Meta.parse(join(s, "\n")))
 
     s = Vector{String}()
     push!(s, "function Measures(measure::Array{Float64, $(ndim)}, uncert::Float64=one(Float64))")
@@ -215,30 +206,30 @@ macro code_ndim(ndim::Int, importf=true)
     push!(s, "    fill!(u, uncert)")
     push!(s, "    Measures_$(ndim)D(measure, u)")
     push!(s, "end")
-    push!(out.args, Meta_parse(join(s, "\n")))
+    push!(out.args, Meta.parse(join(s, "\n")))
 
     s = Vector{String}()
     push!(s, "struct Counts_$(ndim)D <: $(prefix)AbstractCounts")
     push!(s, "  measure::Array{Int, $(ndim)}")
     push!(s, "end")
-    push!(out.args, Meta_parse(join(s, "\n")))
+    push!(out.args, Meta.parse(join(s, "\n")))
 
     s = Vector{String}()
     push!(s, "function Counts(measure::Array{Int, $(ndim)})")
     push!(s, "    Counts_$(ndim)D(measure)")
     push!(s, "end")
-    push!(out.args, Meta_parse(join(s, "\n")))
+    push!(out.args, Meta.parse(join(s, "\n")))
 
     s = "Base.ndims(dom::Measures_$(ndim)D) = $ndim"
-    push!(out.args, Meta_parse(s))
+    push!(out.args, Meta.parse(s))
     s = "Base.ndims(dom::Counts_$(ndim)D) = $ndim"
-    push!(out.args, Meta_parse(s))
+    push!(out.args, Meta.parse(s))
 
     s = Vector{String}()
     push!(s, "function evaluate!(output::Vector{Float64}, domain::Domain_$(ndim)D, compdata::$(prefix)FuncWrap_cdata, params...)")
     push!(s, "  output .= compdata.func(" * join("domain[" .* string.(collect(1:ndim)) .* "]", ", ") * ", params...)")
     push!(s, "end")
-    push!(out.args, Meta_parse(join(s, "\n")))
+    push!(out.args, Meta.parse(join(s, "\n")))
 
     return esc(out)
 end
@@ -267,11 +258,7 @@ Reshape an array according to the size of a CartedsianDomain object
 """
 function reshape(array::AbstractArray, dom::AbstractCartesianDomain)
     @assert length(array) == length(dom) "Domain and array must have the same length"
-    if oldver()
-        out = Array{Float64}(       size(dom)...)
-    else
-        out = Array{Float64}(undef, size(dom)...)
-    end
+    out = Array{Float64}(undef, size(dom)...)
     out .= NaN
     out[dom.index] .= array
     return out

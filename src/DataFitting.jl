@@ -2,12 +2,8 @@ __precompile__(true)
 
 module DataFitting
 
-@inline oldver() = (VERSION < v"0.7.0")
-
-if !oldver()
-    using Printf
-    using Statistics
-end
+using Printf
+using Statistics
 
 # ====================================================================
 export test_component,
@@ -23,28 +19,13 @@ import Base.ndims
 import Base.size
 import Base.reshape
 import Base.length
-if oldver()
-    import Base.start
-    import Base.next
-    import Base.done
-else
-    import Base.iterate
-end
+import Base.iterate
 import Base.keys
 import Base.getindex
 import Base.setindex!
 
 
 # ====================================================================
-if oldver()
-    Meta_parse = Base.parse
-    findall = Base.find
-    printstyled(args...; color=:normal, bold=false) = print_with_color(color, args...; bold=bold)
-    AbstractDict = Associative
-else
-    Meta_parse = Meta.parse
-end
-
 include("HashVector.jl")
 include("Types.jl")
 
@@ -99,14 +80,8 @@ length(model::Model) = length(model.comp)
 keys(model::Model) = keys(model.comp)
 getindex(model::Model, key::Symbol) = getindex(model.comp, key)
 
-if oldver()
-    start(model::Model) = start(model.comp)
-    next(model::Model, i::Int) = next(model.comp, i)
-    done(model::Model, i::Int) = done(model.comp, i)
-else
-    iterate(model::Model) = iterate(model.comp)
-    iterate(model::Model, i::Int) = iterate(model.comp, i)
-end
+iterate(model::Model) = iterate(model.comp)
+iterate(model::Model, i::Int) = iterate(model.comp, i)
 
 function push!(model::Model, cname::Symbol, comp::T) where T <: AbstractComponent
     push!(model.comp, cname, comp)
@@ -159,7 +134,7 @@ function getsetparams!(model::Model, newvalues=Vector{Float64}(), parToUpdate=Ve
             if length(newvalues) != 0
                 if length(parToUpdate) != 0
                     j = findall(wname .== parToUpdate)
-                    (length(i) == 1)  &&  (newval = newvalues[j[1]])
+                    (length(j) == 1)  &&  (newval = newvalues[j[1]])
                 else
                     count += 1
                     newval = newvalues[count]
@@ -284,11 +259,7 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
                 wname = wnames[i]
 
                 if par.expr != ""
-                    if oldver()
-                        push!(code, "    $(wname) = " * replace(par.expr, "this__", "$(cname)__"))
-                    else
-                        push!(code, "    $(wname) = " * replace(par.expr, "this__" => "$(cname)__"))
-                    end
+                    push!(code, "    $(wname) = " * replace(par.expr, "this__" => "$(cname)__"))
                 end
             end
 
@@ -348,7 +319,7 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
         code = join(code, "\n")
 
         # Evaluate the code
-        expr2 = Meta_parse(code)
+        expr2 = Meta.parse(code)
         funct = eval(expr2)
         return (code, funct, compInvolved)
     end
@@ -363,18 +334,10 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
         cevals = HashVector{ComponentEvaluation}()
         for (cname, comp) in model
             (cname in compInvolved)  ||   (continue)
-            if oldver()
-                buffer = Vector{Float64}(       length(ldomain))
-            else
-                buffer = Vector{Float64}(undef, length(ldomain))
-            end
+            buffer = Vector{Float64}(undef, length(ldomain))
             cdata = compdata(ldomain, comp)
 
-            if oldver()
-                tmp = ComponentEvaluation(cdata, Vector{Float64}(       nparams(comp)), buffer, 0)
-            else
-                tmp = ComponentEvaluation(cdata, Vector{Float64}(undef, nparams(comp)), buffer, 0)
-            end
+            tmp = ComponentEvaluation(cdata, Vector{Float64}(undef, nparams(comp)), buffer, 0)
             tmp.lastParams .= NaN
             push!(cevals, cname, tmp)
         end
@@ -696,13 +659,8 @@ function minimize(minimizer::Minimizer, evaluate::Function,
         status = :Optimal
     end
 
-    if oldver()
-        error = LsqFit.estimate_errors(bestfit)
-        return (status, getfield.(bestfit, :param), error)
-    else
-        error = LsqFit.margin_error(bestfit, 0.6827)
-        return (status, getfield.(Ref(bestfit), :param), error)
-    end
+    error = LsqFit.margin_error(bestfit, 0.6827)
+    return (status, getfield.(Ref(bestfit), :param), error)
 end
 
 end
