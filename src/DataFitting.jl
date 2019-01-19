@@ -263,39 +263,13 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
                 end
             end
 
-            tmp1 = ""
-            count = 0
-            for i in 1:length(params)
-                count += 1
-                wname = wnames[i]
-                (count > 1)  &&  (tmp1 *= "  ||  ")
-                tmp1 *= "(_m.cevals[$countInv].lastParams[$count] != $(wname))"
-            end
-            if count == 0
-                tmp1 = "_m.cevals[$countInv].counter < 1"
-            end
-
-            if (tmp1 != "")  &&  cache
-                push!(code, "    if $tmp1")
-                count = 0
-                for i in 1:length(params)
-                    count += 1
-                    wname = wnames[i]
-                    push!(code, "      _m.cevals[$countInv].lastParams[$count] = $(wname)")
-                end
-            end
-            push!(code, "      _m.cevals[$countInv].counter += 1")
-
-            tmp2 = "      evaluate!(_m.cevals[$countInv].result, _m.ldomain, _m.cevals[$countInv].cdata"
+            tmp2 = "      cached_evaluate!(_m.cevals[$countInv], _m.ldomain"
             for i in 1:length(params)
                 wname = wnames[i]
                 tmp2 *= ", $(wname)"
             end
             tmp2 *= ")"
             push!(code, tmp2)
-            if (tmp1 != "")  &&  cache
-                push!(code, "    end")
-            end
             push!(code, "  end")
             push!(code, "")
         end
@@ -390,6 +364,21 @@ function evaluate!(model::Model)
     return evaluate!(model, pvalues)
 end
 
+
+function cached_evaluate!(c::ComponentEvaluation, d::AbstractDomain, args...)
+    if c.counter == 0
+            c.counter += 1
+            return evaluate!(c.result, d, c.cdata, args...)
+    end
+    for i in 1:length(args)
+        if c.lastParams[i] != args[i]
+            c.lastParams .= args
+            c.counter += 1
+            return evaluate!(c.result, d, c.cdata, args...)
+        end
+    end
+    return c.result
+end
 
 
 # --------------------------------------------------------------------
