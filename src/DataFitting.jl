@@ -1,5 +1,3 @@
-__precompile__(true)
-
 module DataFitting
 
 using Printf
@@ -158,11 +156,9 @@ function getsetparams!(model::Model, newvalues=Vector{Float64}(), parToUpdate=Ve
 end
 
 
-
 # --------------------------------------------------------------------
 compdata(domain::AbstractDomain, comp::AbstractComponent) =
     error("Component " * string(typeof(comp)) * " must implement its own version of `compdata`.")
-
 
 
 # --------------------------------------------------------------------
@@ -290,7 +286,6 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
         funct = eval(expr2)
         return (code, funct, compInvolved)
     end
-    
 
     function CompiledExpression2(model::Model, domain::AbstractDomain, compInvolved::Vector{Symbol})
         ldomain = domain
@@ -325,7 +320,6 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
 end
 prepare!(model::Model, domain::AbstractDomain, expr::Expr; cache=true) = prepare!(model, domain, [expr], cache=cache)
 prepare!(model::Model, domain::AbstractDomain, s::Symbol; cache=true) = prepare!(model, domain, [:(+$s)], cache=cache)
-
 
 
 # --------------------------------------------------------------------
@@ -398,7 +392,6 @@ function domain(model::Model, id=1)
 end
 
 
-
 """
 Returns a component evaluation.
 """
@@ -436,6 +429,7 @@ function (model::Model)(id::Int, params::Vararg{Pair{Symbol,T}}) where T <: Numb
     end
     return model(id)
 end
+
 
 (model::Model)() = model(1)
 function (model::Model)(id::Int)
@@ -484,8 +478,6 @@ end
 
 # --------------------------------------------------------------------
 function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, iter=1)
-    #println()
-    #printstyled(color=:magenta, bold=true, "================================================================================\n")
     printstyled(color=:magenta, bold=true, "Profiling component:\n")
     model = Model(:test => comp)
     show(model)
@@ -513,7 +505,6 @@ function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, i
 end
 test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1) =
     test_component(flatten(domain), comp, iter)
-
 
 
 # ####################################################################
@@ -615,7 +606,6 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     # end
 end
 fit!(model::Model, data::AbstractData; minimizer=Minimizer()) = fit!(model, [data]; minimizer=minimizer)
-
 
 
 # ====================================================================
