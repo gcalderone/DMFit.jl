@@ -248,11 +248,6 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
             (!(cname in compInvolved))  &&  (continue)
             countInv += 1
 
-            push!(code, "  $cname = _m.cevals[$countInv].result")
-            push!(code, "  if isfinite(_altValues[$countAll])")
-            push!(code, "    $cname = _altValues[$countAll]")
-            push!(code, "  else")
-
             (wnames, params) = getparams(comp, string(cname))
             for i in 1:length(params)
                 par = params[i]
@@ -263,15 +258,13 @@ function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cac
                 end
             end
 
-            tmp2 = "      cached_evaluate!(_m.cevals[$countInv], _m.ldomain"
+            tmp2 = "  $cname = cached_evaluate!(_altValues[$countAll], _m.cevals[$countInv], _m.ldomain"
             for i in 1:length(params)
                 wname = wnames[i]
                 tmp2 *= ", $(wname)"
             end
             tmp2 *= ")"
             push!(code, tmp2)
-            push!(code, "  end")
-            push!(code, "")
         end
         
         j = 1 + length(model.results)
@@ -365,7 +358,8 @@ function evaluate!(model::Model)
 end
 
 
-function cached_evaluate!(c::ComponentEvaluation, d::AbstractDomain, args...)
+function cached_evaluate!(override::Float64, c::ComponentEvaluation, d::AbstractDomain, args...)
+    (isfinite(override))  &&  (return override)
     if c.counter == 0
             c.counter += 1
             return evaluate!(c.result, d, c.cdata, args...)
