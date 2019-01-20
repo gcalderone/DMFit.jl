@@ -138,7 +138,7 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
         compinvolved = unique([compinvolved; parse_model_expr(expr, keys(components(model)))])
     end
 
-    # TODO: Sort involved components according to insertion order
+    # Sort involved components according to insertion order
     kk = keys(components(model))
     sort!(compinvolved, lt=(a, b) -> findall(a .== kk)[1] < findall(b .== kk)[1])
     
