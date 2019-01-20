@@ -320,18 +320,13 @@ function show(stream::IO, comp::AbstractComponent; color=:default, header=true, 
     end
 
     extraFields = false
-    (wnames, params) = getparams(comp)
-    for i in 1:length(params)
-        par = params[i]
-        wname = wnames[i]
-
+    for (pname, par) in getparams(comp)
         note = ""
         (par.fixed)  &&  (note *= "FIXED")
         (par.expr != "")  &&  (note *= " expr=" * par.expr)
-
         count += 1
         s = @sprintf("%5d|%20s|%10s|%10.3g|%10.3g|%10.3g|%s\n",
-                     count, cname, wname,
+                     count, cname, pname,
                      par.val, par.low, par.high, note)
         printstyled(color=color, stream, s)
     end
@@ -351,38 +346,36 @@ end
 
 
 # ====================================================================
-# ComponentEvaluation, CompiledExpression and Model structure, and
+# CompEvaluation, CompiledExpression and Model structure, and
 # associated show method
 #
-mutable struct ComponentEvaluation
+mutable struct CompEvaluation
+    counter::Int
     cdata::AbstractComponentData
     lastParams::Vector{Float64}
     result::Vector{Float64}
-    counter::Int
 end
 
 
 mutable struct CompiledExpression
     code::String
     funct::Function
-    exprs::Vector{Expr}
-    compInvolved::Vector{Symbol}
     counter::Int
 
-    ldomain::AbstractLinearDomain
     domain::AbstractDomain
-    cevals::HashVector{ComponentEvaluation}
+    exprs::Vector{Expr}
+    results::Vector{Vector{Float64}}
+
+    compnames::Vector{Symbol}  # only involved components
+    compevals::Vector{CompEvaluation}
 end
 
 
 mutable struct Model <: AbstractDict{Symbol, AbstractComponent}
-    comp::HashVector{AbstractComponent}
-    altValues::HashVector{Float64}
+    comp::OrderedDict{Symbol, AbstractComponent}
     compiled::Vector{CompiledExpression}
-    results::Vector{Vector{Float64}}
-    domainid::Vector{Int}
-    Model() = new(HashVector{AbstractComponent}(), HashVector{Float64}(),
-                  Vector{CompiledExpression}(), Vector{Vector{Float64}}(), Vector{Int}())
+    Model() = new(OrderedDict{Symbol, AbstractComponent}(),
+                  Vector{CompiledExpression}())
 end
 
 
@@ -392,132 +385,114 @@ function show(stream::IO, model::Model)
 
     s = @sprintf "Components:\n"
     printstyled(color=:default, stream, s, bold=true)
-    length(model) != 0  || (return nothing)
+    compcount(model) != 0  || (return nothing)
 
-    s = @sprintf "%5s|%20s|%21s|%10s\n"  "#" "Component" "Type" "Alt. value"
+    s = @sprintf "%5s|%20s|%s\n"  "#" "Component" "Type"
     printstyled(color=:default, stream, s)
 
     color = sort(color)
     count = 0
-    for (cname, comp) in model
+    for (cname, comp) in components(model)
         count += 1
         color = circshift(color, 1)
 
         ctype = split(string(typeof(comp)), ".")
-        if ctype[1] == "DataFitting"
-            ctype = ctype[2:end]
-        end
-        ctype = join(ctype[2:end], ".")
+        (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
+        ctype = join(ctype, ".")
 
-        altValue = model.altValues[cname]
-        ss = (isfinite(altValue)  ?  @sprintf("%10.3g", altValue)  :  "")
-        s = @sprintf "%5d|%20s|%21s|%10s\n" count string(cname) ctype ss
+        s = @sprintf "%5d|%20s|%s\n" count string(cname) ctype
         printstyled(color=color[1], stream, s)
     end
     println(stream)
 
     printstyled(color=:default, stream, "Parameters:\n", bold=true)
     count = 0
-    for (cname, comp) in model
+    for (cname, comp) in components(model)
         color = circshift(color, 1)
         count = show(stream, comp, cname=string(cname), count=count, color=color[1], header=false)
     end
-    (length(model.compiled) == 0)  &&  (return)
-
     println(stream)
-    s = @sprintf "Domains:\n"
+    
+    if length(compiled(model)) == 0
+        printstyled(stream, "Total expressions: 0", bold=true)
+        return nothing
+    end
+    
+    s = @sprintf "Domain(s):\n"
     printstyled(color=:default, stream, s, bold=true)
-    for i in 1:length(model.compiled)
-        cc = model.compiled[i]
-
-        s = @sprintf "#%d: " i
+    for ii in 1:length(compiled(model))
+        ce = compiled(model, ii)
+        s = @sprintf "#%d:  " ii
         printstyled(color=:default, stream, s, bold=true)
-        show(stream, cc.domain)
 
+        show(stream, ce.domain)
         println(stream)
-        s = @sprintf "%20s|%7s|%13s|%10s|%10s|%10s\n" "Component" "Counter" "Result size" "Min" "Max" "Mean"
-        printstyled(color=:default, stream, s)
+    end
+
+    countexpr = 0
+    s = @sprintf "Expression(s): \n"
+    printstyled(color=:default, stream, s, bold=true)
+    s = @sprintf "%3s|%10s|%7s|%10s|%10s|%10s|%10s|%10s|\n" "#" "Component" "Counter" "Min" "Max" "Mean" "NaN" "Inf"
+    printstyled(color=:default, stream, s)
+
+    for ii in 1:length(compiled(model))
+        ce = compiled(model, ii)
 
         color = sort(color)
-        count = 0
         nonFinite = Vector{String}()
 
-        for (cname, ceval) in cc.cevals
-            count += 1
+        for jj in 1:length(ce.compevals)
+            cname = ce.compnames[jj]
+            ceval = ce.compevals[jj]
             color = circshift(color, 1)
 
-            i = findall(isfinite.(ceval.result))
-            v = view(ceval.result, i)
-
-            s = @sprintf("%20s|%7d|%13s|%10.3g|%10.3g|%10.3g\n",
-                         cname, ceval.counter, string(size(ceval.result)),
-                         minimum(v), maximum(v), mean(v))
+            result = ceval.result
+            v = view(result, findall(isfinite.(result)))
+            nan = length(findall(isnan.(result)))
+            inf = length(findall(isinf.(result)))
+            s = @sprintf("%3d|%10s|%7d|%10.3g|%10.3g|%10.3g|%10d|%10d|\n",
+                         ii, cname, ceval.counter,
+                         minimum(v), maximum(v), mean(v), nan, inf)
             printstyled(color=color[1], stream, s)
+        end
+        for jj in 1:length(ce.exprs)
+            color = circshift(color, 1)
 
-            nan = length(findall(isnan.(ceval.result)))
-            inf = length(findall(isinf.(ceval.result)))
-            if nan > 0  || inf > 0
-                push!(nonFinite, @sprintf("%20s | NaN: %-10d   Inf: %-10d\n",
-                                          cname, nan, inf))
-            end
+            result = ce.results[jj]
+            v = view(result, findall(isfinite.(result)))
+            nan = length(findall(isnan.(result)))
+            inf = length(findall(isinf.(result)))
+            s = @sprintf("%3d|%10s|%7d|%10.3g|%10.3g|%10.3g|%10d|%10d|%s\n",
+                         ii, "Expr #"*string(jj), ce.counter,
+                         minimum(v), maximum(v), mean(v), nan, inf, ce.exprs[jj])
+            printstyled(color=color[1], stream, s, bold=true)
+            countexpr += 1
         end
         println(stream)
     end
-
-    s = @sprintf "Expressions:\n"
-    printstyled(color=:default, stream, s, bold=true)
-    count = 0
-    for i in 1:length(model.compiled)
-        for j in 1:length(model.compiled[i].exprs)
-            count += 1
-            s = @sprintf "#%d (on domain #%d): %s\n" count i string(model.compiled[i].exprs[j])
-            printstyled(color=:default, stream, s, bold=true)
-        end
-    end
-    println(stream)
-
-    s = @sprintf "%20s|%7s|%13s|%10s|%10s|%10s\n" "Expression" "Counter" "Result size" "Min" "Max" "Mean"
-    printstyled(color=:default, stream, s)
-    for i in 1:length(model.results)
-        res = model.results[i]
-        j = findall(isfinite.(res))
-        v = view(res, j)
-
-        s = @sprintf("%20s|%7d|%13s|%10.3g|%10.3g|%10.3g\n",
-                     "#" * string(i), model.compiled[i].counter, string(size(res)),
-                     minimum(v), maximum(v), mean(v))
-        printstyled(color=:default, bold=true, stream, s)
-
-        nonFinite = Vector{String}()
-        nan = length(findall(isnan.(res)))
-        inf = length(findall(isinf.(res)))
-        if nan > 0  || inf > 0
-            push!(nonFinite, @sprintf("%20s| NaN: %-10d   Inf: %-10d\n",
-                                      "Meval", nan, inf))
-        end
-
-        if length(nonFinite) > 0
-            println(stream)
-            for s in nonFinite
-                printstyled(color=:red, stream, bold=true, s)
-            end
-        end
-    end
+    printstyled(stream, "Total expressions: " * string(countexpr), bold=true)
 end
 
 
 # ====================================================================
 # FitParameter and FitResult structures, and associated show method.
 #
-struct FitParameter
+struct BestFitParameter
     val::Float64
     unc::Float64
 end
 
+struct BestFitComponent
+    params::OrderedDict{Symbol, BestFitParameter}
+end    
+
+struct BestFit
+    comp::OrderedDict{Symbol, BestFitComponent}
+end    
 
 struct FitResult
     fitter::AbstractMinimizer
-    param::HashVector{FitParameter}
+    bestfit::BestFit
     ndata::Int
     dof::Int
     cost::Float64
@@ -527,12 +502,7 @@ end
 
 
 function show(stream::IO, f::FitResult)
-    #printstyled(color=:default, stream, "Minimizer:\n  " * string(typeof(f.fitter)), bold=true)
-    #println(stream)
-    #println(stream)
-
     color = [229, 255]
-
     s = @sprintf "Best fit values:\n"
     printstyled(color=:default, stream, s, bold=true)
 
@@ -541,20 +511,13 @@ function show(stream::IO, f::FitResult)
 
     color = sort(color)
     count = 0
-    currentComp = ""
-    for (pname, par) in f.param
-        count += 1
-
-        tmp = split(string(pname), "__")
-        cname = tmp[1]
-        pname = tmp[2]
-        if currentComp != cname
-            color = circshift(color, 1)
-            currentComp = cname
+    for (cname, comp) in getfield(f.bestfit, :comp)
+        for (pname, par) in getfield(comp, :params)
+            count += 1
+            s = @sprintf "%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n" count cname pname par.val par.unc par.unc/par.val*100.
+            printstyled(color=color[1], stream, s)
         end
-
-        s = @sprintf "%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n" count cname pname par.val par.unc par.unc/par.val*100.
-        printstyled(color=color[1], stream, s)
+        color = circshift(color, 1)
     end
 
     println(stream)

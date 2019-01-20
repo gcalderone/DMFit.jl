@@ -2,29 +2,25 @@ module DataFitting
 
 using Printf
 using Statistics
+using DataStructures
 
 # ====================================================================
 export test_component,
     Domain, CartesianDomain, getaxismin, getaxismax, getaxisextrema,
-    Measures, FuncWrap, SimpleParam,
-    Model, prepare!, evaluate!, setcompvalue!, resetcounters!, fit!,
-    domain, evalcounter
+    Measures, FuncWrap, SimpleParam, flatten,
+    Model, domain, evalcounter, resetcounters!,
+    prepare!, evaluate!, fit
 
 # ====================================================================
-import Base.push!
 import Base.show
 import Base.ndims
 import Base.size
-import Base.reshape
+import Base.push!
 import Base.length
-import Base.iterate
-import Base.keys
 import Base.getindex
-import Base.setindex!
+import Base.propertynames
+import Base.getproperty
 
-
-# ====================================================================
-include("HashVector.jl")
 include("Types.jl")
 
 
@@ -34,127 +30,74 @@ include("Types.jl")
 
 # --------------------------------------------------------------------
 """
-# nparams
-
-Returns number of params in a component.
-"""
-function nparams(comp::AbstractComponent)
-    count = 0
-    for pname in fieldnames(typeof(comp))
-        if fieldtype(typeof(comp), pname) == Parameter
-            count += 1
-        end
-        if fieldtype(typeof(comp), pname) == Vector{Parameter}
-            count += length(getfield(comp, pname))
-        end
-    end
-    return count
-end
-
-
-# --------------------------------------------------------------------
-"""
 # Model
 
 Constructor for the `Model` structure.
 """
-function Model(c::Pair{Symbol, T}, args...) where T<:AbstractComponent
-    model = Model()
-    push!(model.comp,      c[1], c[2])
-    push!(model.altValues, c[1], NaN)
-
+Model(args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N} = push!(Model(), args...)
+function push!(model::Model, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
     for c in args
-        @assert typeof(c) <: Pair
-        @assert typeof(c[1]) == Symbol
-        @assert typeof(c[2]) <: AbstractComponent
-        push!(model.comp,      c[1], c[2])
-        push!(model.altValues, c[1], NaN)
+        getfield(model, :comp)[c[1]] = c[2]
     end
     return model
 end
 
-# Forward methods to Model.comp
-length(model::Model) = length(model.comp)
-keys(model::Model) = keys(model.comp)
-getindex(model::Model, key::Symbol) = getindex(model.comp, key)
+compcount(model::Model) = length(getfield(model, :comp))
+components(model::Model) = getfield(model, :comp)
+compiled(model::Model) = getfield(model, :compiled)
 
-iterate(model::Model) = iterate(model.comp)
-iterate(model::Model, i::Int) = iterate(model.comp, i)
-
-function push!(model::Model, cname::Symbol, comp::T) where T <: AbstractComponent
-    push!(model.comp, cname, comp)
-    push!(model.altValues, cname, NaN)
-    return model
+function compiled(model::Model, id::Int)
+    c = compiled(model)
+    @assert length(c) >= 1 "No model has been compiled"
+    @assert 1 <= id <= length(c) "Invalid index (allowed range: 1 : " * string(length(c)) * ")"
+    return c[id]
 end
 
+propertynames(model::Model) = collect(keys(getfield(model, :comp)))
+getproperty(model::Model, s::Symbol) = get(getfield(model, :comp), s, nothing)
 
-function getparams(comp::T, cname::String="") where T <: AbstractComponent
-    prefix = cname
-    (prefix != "")  &&  (prefix *= "__")
-    pnames = Vector{String}()
-    params = Vector{Parameter}()
-    count = 0
+propertynames(res::BestFit) = collect(keys(getfield(res, :comp)))
+getproperty(res::BestFit, s::Symbol) = get(getfield(res, :comp), s, nothing)
+
+propertynames(res::BestFitComponent) = collect(keys(getfield(res, :params)))
+getproperty(res::BestFitComponent, s::Symbol) = get(getfield(res, :params), s, nothing)
+
+
+
+# --------------------------------------------------------------------
+"""
+# paramcount
+
+Returns number of params in a component.
+"""
+paramcount(comp::AbstractComponent) = length(getparams(comp))
+
+function getparams(comp::AbstractComponent)
+    out = OrderedDict{Symbol, Parameter}()
     for pname in fieldnames(typeof(comp))
-        isVector = false
-        if fieldtype(typeof(comp), pname) == Parameter
-            push!(params, getfield(comp, pname))
-            wname = prefix * string(pname)
-            push!(pnames, wname)
-        elseif fieldtype(typeof(comp), pname) == Vector{Parameter}
-            isVector = true
-            count = 0
-            push!(params, getfield(comp, pname)...)
-            for j in 1:length(getfield(comp, pname))
-                wname = prefix * string(pname) * string(j)
-                push!(pnames, wname)
+        tmp = getfield(comp, pname)
+        if typeof(tmp) == Parameter
+            out[pname] = tmp
+        elseif typeof(tmp) == Vector{Parameter}
+            for i in 1:length(tmp)
+                out[Symbol(pname, i)] = tmp[i]
             end
         end
     end
-    return (pnames, params)
+    return out
 end
 
-
-function getsetparams!(model::Model, newvalues=Vector{Float64}(), parToUpdate=Vector{Symbol}())
-    out_cnames = Vector{Symbol}()
-    out_pnames = Vector{Symbol}()
-    out_wnames = Vector{Symbol}()
-    out_params = Vector{Parameter}()
-
-    count = 0
-    for (cname, comp) in model.comp
-        (pnames, params) = getparams(comp)
-        for i in 1:length(params)
-            par = params[i]
-            pname = pnames[i]
-            wname = string(cname) * "__" * pname
-
-            newval = NaN
-            if length(newvalues) != 0
-                if length(parToUpdate) != 0
-                    j = findall(wname .== parToUpdate)
-                    (length(j) == 1)  &&  (newval = newvalues[j[1]])
-                else
-                    count += 1
-                    newval = newvalues[count]
-                end
-            end
-            if isfinite(newval)
-                @assert (par.low <= newval <= par.high) "Value of parameter $(wname) is outside limits: $(par.low) < $(newval) < $(par.high)"
-                par.val = newval
-            end
-
-            @assert (par.low <= par.val <= par.high) "Value of parameter $(wname) is outside limits: $(par.low) < $(par.val) < $(par.high)"
-            (isfinite(model.altValues[cname]))  &&  (par.fixed = true)
-
-            push!(out_cnames, cname)
-            push!(out_pnames, Symbol(pname))
-            push!(out_wnames, Symbol(wname))
-            push!(out_params, par)
+function getparams(model::Model)
+    out = OrderedDict{Symbol, Parameter}()
+    for (cname, comp) in components(model)
+        for (pname, par) in getparams(comp)
+            out[Symbol(cname, "__", pname)] = par
         end
     end
-    return (out_cnames, out_pnames, out_wnames, out_params)
+    return out
 end
 
+getparamvalues(v::Union{Model, AbstractComponent}) = [par.val for (pname, par) in getparams(v)]
 
 # --------------------------------------------------------------------
 compdata(domain::AbstractDomain, comp::AbstractComponent) =
@@ -162,27 +105,121 @@ compdata(domain::AbstractDomain, comp::AbstractComponent) =
 
 
 # --------------------------------------------------------------------
-"""
-# prepare!
+function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
+    function parse_model_expr(expr::Union{Symbol, Expr}, cnames, accum=Vector{Symbol}())
+        if typeof(expr) == Expr
+            # Parse the expression to check which components are involved
+            for i in 1:length(expr.args)
+                arg = expr.args[i]
 
-Recompile the expressions after one (or more) parameter expressions have been changed
-"""
-function prepare!(model::Model)
-    bkp = deepcopy(model)
-
-    # Delete all compiled expressions and results
-    empty = Model()
-    model.compiled = empty.compiled
-    model.results = empty.results
-    model.domainid = empty.domainid
-
-    # Recompile expressions
-    for i in 1:length(bkp.compiled)
-        prepare!(model, bkp.compiled[1].domain, bkp.compiled[1].exprs)
+                if typeof(arg) == Symbol
+                    if arg in cnames # if it is one of the model components...
+                        if i == 1  &&  expr.head == :call # ... and it is a function call...
+                            error("Composite components are not yet supported")
+                        else
+                            push!(accum, arg)
+                        end
+                    end
+                elseif typeof(arg) == Expr
+                    parse_model_expr(arg, cnames, accum)
+                else
+                    println("Not handled: " * string(typeof(arg)))
+                end
+            end
+        else
+            push!(accum, expr)
+        end
+        return accum
     end
 
+    # Check which components are involved
+    compinvolved = Vector{Symbol}()
+    for expr in exprs
+        compinvolved = unique([compinvolved; parse_model_expr(expr, keys(components(model)))])
+    end
+
+    # TODO: Sort involved components according to insertion order
+    kk = keys(components(model))
+    sort!(compinvolved, lt=(a, b) -> findall(a .== kk)[1] < findall(b .== kk)[1])
+    
+    # Prepare the code for model evaluation
+    code = Vector{String}()
+    tmp = ""
+    for (cname, comp) in components(model)
+        for (pname, par) in getparams(comp)
+            tmp *= ", $(cname)__$(pname)::Float64"
+        end
+    end
+    push!(code, "(_ce::CompiledExpression $tmp, _unused_...) -> begin")
+    # The last argument, _unused_, allows to push! further
+    # components in the model after an expression has already been
+    # prepared
+    for (cname, comp) in components(model)
+        if cname in compinvolved
+            i = findall(cname .== compinvolved)[1]
+            tmp = ""
+            for (pname, par) in getparams(comp)
+                (par.expr != "")  &&  (push!(code, "    $(cname)__$(pname) = " *
+                                             replace(par.expr, "this__" => "$(cname)__")))
+                tmp *= ", $(cname)__$(pname)"
+            end
+            push!(code, "  $cname = _evaluate!(_ce.compevals[$i], _ce.domain $tmp)")
+        end
+    end
+
+    results = Vector{Vector{Float64}}()
+    for i in 1:length(exprs)
+        push!(code, "  @. _ce.results[$i] = (" * string(exprs[i]) * ")")
+        push!(results, Vector{Float64}(undef, length(domain)))
+    end
+    push!(code, "  _ce.counter += 1")
+    push!(code, "  return nothing")
+    push!(code, "end")
+    funct = eval(Meta.parse(join(code, "\n")))
+
+    compevals = Vector{CompEvaluation}()
+    for (cname, comp) in components(model)
+        if cname in compinvolved
+            tmp = CompEvaluation(0, compdata(domain, comp),
+                                 Vector{Float64}(undef, paramcount(comp)),
+                                 Vector{Float64}(undef, length(domain)))
+            tmp.lastParams .= NaN
+            push!(compevals, tmp)
+        end
+    end
+
+    return CompiledExpression(join(code, "\n"), funct, 0,
+                              deepcopy(domain), deepcopy(exprs), results,
+                              compinvolved, compevals)
+end
+    
+# --------------------------------------------------------------------
+function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
+    if c.counter == 0
+        c.counter += 1
+        evaluate!(c.result, d, c.cdata, args...)
+    else
+        for i in 1:length(args)
+            if c.lastParams[i] != args[i]
+                c.lastParams .= args
+                c.counter += 1
+                evaluate!(c.result, d, c.cdata, args...)
+            end
+        end
+    end
+    return c.result
+end
+
+_evaluate!(ce::CompiledExpression, pvalues::Vector{Float64}) = Base.invokelatest(ce.funct, ce, pvalues...)
+
+function evaluate!(model::Model, pvalues::Vector{Float64})
+    for ce in compiled(model)
+        _evaluate!(ce, pvalues)
+    end
     return model
 end
+
+evaluate!(model::Model) = evaluate!(model, getparamvalues(model))
 
 
 # --------------------------------------------------------------------
@@ -190,195 +227,22 @@ end
 # prepare!
 
 Prepare a model to be evaluated on the given domain, with the given
-mathematical expression to join the components.
+mathematical expression.
 """
-function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr}; cache=true)
-
-    function CompiledExpression1(model::Model, exprs::Vector{Expr}; cache=true)
-        function parse_model_expr(expr, cnames, simple=Vector{Symbol}(), composite=Vector{Symbol}())
-            if typeof(expr) == Expr
-                # Parse the expression to check which components are involved
-                for i in 1:length(expr.args)
-                    arg = expr.args[i]
-                    
-                    if typeof(arg) == Symbol
-                        if arg in cnames # if it is one of the model components...
-                            if i == 1  &&  expr.head == :call # ... and it is a function call...
-                                push!(composite, arg)
-                            else
-                                push!(simple, arg)
-                            end
-                        end
-                    elseif typeof(arg) == Expr
-                        parse_model_expr(arg, cnames, simple, composite)
-                    else
-                        println("Not handled: " * string(typeof(arg)))
-                    end
-                end
-            else
-                push!(simple, expr)
-            end
-            return (simple, composite)
-        end
-
-        # Check which components are involved.  TODO: handle composite components
-        compInvolved = Vector{Symbol}()
-        for i in 1:length(exprs)
-            (a, b) = parse_model_expr(exprs[i], keys(model))
-            push!(compInvolved, a...)
-        end
-        compInvolved = unique(compInvolved)
-        
-        # Prepare the code for model evaluation
-        code = Vector{String}()
-        (cnames, pnames, wnames, params) = getsetparams!(model)
-        push!(code, "(_m::CompiledExpression, _altValues::HashVector{Float64}, _results::Vector{Vector{Float64}}, " *
-              join(string.(wnames) .* "::Float64", ", ") * ", _unused_...) -> begin")
-        # The last argument, _unused_, allows to push! further
-        # components in the model after an expression has already been
-        # prepared
-        countAll = 0
-        countInv = 0
-        for (cname, comp) in model
-            countAll += 1
-            (!(cname in compInvolved))  &&  (continue)
-            countInv += 1
-
-            (wnames, params) = getparams(comp, string(cname))
-            for i in 1:length(params)
-                par = params[i]
-                wname = wnames[i]
-
-                if par.expr != ""
-                    push!(code, "    $(wname) = " * replace(par.expr, "this__" => "$(cname)__"))
-                end
-            end
-
-            tmp2 = "  $cname = cached_evaluate!(_altValues[$countAll], _m.cevals[$countInv], _m.ldomain"
-            for i in 1:length(params)
-                wname = wnames[i]
-                tmp2 *= ", $(wname)"
-            end
-            tmp2 *= ")"
-            push!(code, tmp2)
-        end
-        
-        j = 1 + length(model.results)
-        push!(code, "  if length(_results[$j]) <= 1")
-        for i in 1:length(exprs)
-            j = i + length(model.results)
-            push!(code, "    _results[$j] = @. (" * string(exprs[i]) * ")")
-        end
-        push!(code, "  else")
-        for i in 1:length(exprs)
-            j = i + length(model.results)
-            push!(code, "    @.( _results[$j] = " * string(exprs[i]) * ")")
-        end
-        push!(code, "  end")
-        push!(code, "")
-        push!(code, "  _m.counter += 1")
-        push!(code, "  return nothing")
-        push!(code, "end")
-        code = join(code, "\n")
-
-        # Evaluate the code
-        expr2 = Meta.parse(code)
-        funct = eval(expr2)
-        return (code, funct, compInvolved)
-    end
-
-    function CompiledExpression2(model::Model, domain::AbstractDomain, compInvolved::Vector{Symbol})
-        ldomain = domain
-        if typeof(domain) <: AbstractCartesianDomain
-            ldomain = flatten(domain)  # <- TYPE INSTABILITY
-        end
-
-        cevals = HashVector{ComponentEvaluation}()
-        for (cname, comp) in model
-            (cname in compInvolved)  ||   (continue)
-            buffer = Vector{Float64}(undef, length(ldomain))
-            cdata = compdata(ldomain, comp)
-
-            tmp = ComponentEvaluation(cdata, Vector{Float64}(undef, nparams(comp)), buffer, 0)
-            tmp.lastParams .= NaN
-            push!(cevals, cname, tmp)
-        end
-
-        return (ldomain, cevals)
-    end
-
-    (code, funct, compInvolved) = CompiledExpression1(model, exprs, cache=cache)
-    (ldomain, cevals) = CompiledExpression2(model, domain, compInvolved)
-    push!(model.compiled, CompiledExpression(code, funct, deepcopy(exprs), compInvolved, 0,
-                                             ldomain, deepcopy(domain), cevals))
-    for i in 1:length(exprs)
-        push!(model.results, Vector{Float64}())
-        push!(model.domainid, length(model.compiled))
-    end
+function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
+    push!(compiled(model), CompiledExpression(model, domain, exprs))
     evaluate!(model)
     return model
 end
-prepare!(model::Model, domain::AbstractDomain, expr::Expr; cache=true) = prepare!(model, domain, [expr], cache=cache)
-prepare!(model::Model, domain::AbstractDomain, s::Symbol; cache=true) = prepare!(model, domain, [:(+$s)], cache=cache)
+prepare!(model::Model, domain::AbstractDomain, expr::Expr) = prepare!(model, domain, [expr])
+prepare!(model::Model, domain::AbstractDomain, s::Symbol)  = prepare!(model, domain, [:(+$s)])
 
 
 # --------------------------------------------------------------------
-function checkID(model::Model, id::Int)
-    @assert length(model.compiled) >= 1 "No model has been compiled"
-    @assert 1 <= id <= length(model.compiled) "Invalid index (allowed range: 1 : " * string(length(model.compiled)) * ")"
-end
-
-"""
-# evaluate!
-
-Evaluate the model(s)
-"""
-function evaluate!(model::Model, id::Int, pvalues::Vector{Float64})
-    checkID(model, id)
-    return Base.invokelatest(model.compiled[id].funct, model.compiled[id], model.altValues, model.results, pvalues...)
-end
-
-function evaluate!(model::Model, pvalues::Vector{Float64})
-    for id in 1:length(model.compiled)
-        evaluate!(model, id, pvalues)
-    end
-    return model
-end
-
-function evaluate!(model::Model)
-    (cnames, pnames, wnames, params) = getsetparams!(model)
-    pvalues = getfield.(params, :val)
-    return evaluate!(model, pvalues)
-end
-
-
-function cached_evaluate!(override::Float64, c::ComponentEvaluation, d::AbstractDomain, args...)
-    (isfinite(override))  &&  (return override)
-    if c.counter == 0
-            c.counter += 1
-            return evaluate!(c.result, d, c.cdata, args...)
-    end
-    for i in 1:length(args)
-        if c.lastParams[i] != args[i]
-            c.lastParams .= args
-            c.counter += 1
-            return evaluate!(c.result, d, c.cdata, args...)
-        end
-    end
-    return c.result
-end
-
-
-# --------------------------------------------------------------------
-"""
-# setcompvalue!
-
-Set a component value in the model
-"""
-function setcompvalue!(model::Model, cname::Symbol, value::Number=NaN)
-    model.altValues[cname] = float(value)
-    evaluate!(model)
-    return value
+function getceval(ce::CompiledExpression, cname::Symbol)
+    i = findall(ce.compnames .== cname)
+    @assert length(i) == 1 "No component named $cname involved in compiled expression"
+    return ce.compevals[i[1]]
 end
 
 """
@@ -386,80 +250,33 @@ end
 
 Return the domain associated to a model.
 """
-function domain(model::Model, id=1)
-    checkID(model, id)
-    return model.compiled[id].domain
-end
+domain(model::Model, id=1) = compiled(model, id).domain
 
 
 """
 Returns a component evaluation.
 """
-function (model::Model)(comp::Symbol, id=1)
-    checkID(model, id)
-
-    if comp in keys(model.comp)
-        if isfinite(model.altValues[comp])
-            return model.altValues[comp]
-        end
-
-        if comp in model.compiled[id].compInvolved
-            return model.compiled[id].cevals[comp].result
-        end
-        return [NaN]
-    end
-    error("No component named $comp is defined.")
+function getindex(model::Model, id::Int=1)
+    out = compiled(model, id).results
+    (length(out) == 1)  &&  (return out[1])
+    return out
 end
+getindex(model::Model, id::Int, cname::Symbol) = getceval(compiled(model, id), cname).result
 
-
-"""
-Returns a model evaluation with the parameter values given as input.
-"""
-function (model::Model)(id::Int, params::Vararg{Pair{Symbol,T}}) where T <: Number
-    @assert 1 <= id <= length(model.results) "Invalid index (allowed range: 1 : " * string(length(model.results)) * ")"
-    if length(params) > 0
-        pnames = Vector{Symbol}()
-        pvalues = Vector{Float64}()
-        for (pname, pvalue) in params
-            push!(pnames, pname)
-            push!(pvalues, pvalue)
-        end
-        getsetparams!(model, pvalues, pnames)
-        evaluate!(model)
-    end
-    return model(id)
-end
-
-
-(model::Model)() = model(1)
-function (model::Model)(id::Int)
-    @assert 1 <= id <= length(model.results) "Invalid index (allowed range: 1 : " * string(length(model.results)) * ")"
-    return model.results[id]
-end
-
-function (model::Model)(params::Vararg{Pair{Symbol,T}}) where T <: Number
-    return model(1, params...)
-end
-
+# --------------------------------------------------------------------
 """
 # evalcounter
 
 Return the number of times the model has been evaluated.
 """
-function evalcounter(model::Model, id=1)
-    checkID(model, id)
-    return model.compiled[id].counter
-end
+evalcounter(model::Model, id::Int=1) = compiled(model, id).counter
 
 """
 # evalcounter
 
 Return the number of times a component has been evaluated.
 """
-function evalcounter(model::Model, comp::Symbol, id=1)
-    checkID(model, id)
-    return model.compiled[id].cevals[comp].counter
-end
+evalcounter(model::Model, id::Int, cname::Symbol) = getceval(compiled(model, id), cname).counter
 
 """
 # resetcounters!
@@ -467,27 +284,22 @@ end
 Reset model and components evaluation counters.
 """
 function resetcounters!(model::Model)
-    for id in 1:length(model.compiled)
-        for j in 1:length(model.compiled[id].cevals)
-            model.compiled[id].cevals[j].counter = 0
+    for ce in compiled(model)
+        ce.counter = 0
+        for ceval in ce.compevals
+            ceval.counter = 0
         end
-        model.compiled[id].counter = 0
     end
 end
 
 
 # --------------------------------------------------------------------
 function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, iter=1)
-    printstyled(color=:magenta, bold=true, "Profiling component:\n")
     model = Model(:test => comp)
-    show(model)
+    prepare!(model, domain, :(+test))
 
-    prepare!(model, domain, :(+test), cache=false)
-
-    println()
     printstyled(color=:magenta, bold=true, "First evaluation:\n")
     @time result = evaluate!(model)
-
     if iter > 0
         println()
         printstyled(color=:magenta, bold=true, "Further evaluations ($iter):\n")
@@ -495,12 +307,11 @@ function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, i
         @time begin
             for i in 1:iter
                 result = evaluate!(model)
+                compiled(model, 1).compevals[1].lastParams[1] = NaN  # Force re-calculation
             end
         end
     end
-    #println()
-    #show(model)
-
+    show(model)
     return nothing
 end
 test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1) =
@@ -513,20 +324,21 @@ test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1)
 support_param_limits(f::AbstractMinimizer) = false
 
 """
-# fit!
+# fit
 
 Fit a model against data, using the specified minimizer.
 """
-function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:AbstractMeasures
-    @assert typeof(minimizer) <: AbstractMinimizer
+function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:AbstractMeasures
     elapsedTime = Base.time_ns()
 
-    @assert length(model.comp) >= 1
-    @assert length(model.compiled) >= 1
-    @assert length(model.results) == length(data) "Model has " * string(length(model.results)) * " expressions but " * string(length(data)) * " data were given."
+    @assert typeof(minimizer) <: AbstractMinimizer
+    @assert length(compiled(model)) >= 1
 
     # Check if the minimizer supports bounded parameters
-    (cnames, pnames, wnames, params) = getsetparams!(model)
+    dict_params = getparams(model)
+    pnames = collect(keys(dict_params))
+    params = collect(values(dict_params))
+    
     pvalues = getfield.(params, :val)
     ifree = findall(.! getfield.(params, :fixed))
     @assert length(ifree) > 0 "No free parameter in the model"
@@ -534,7 +346,7 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     if !support_param_limits(minimizer)
         if  (length(findall(isfinite.(getfield.(params, :low )))) > 0)  ||
             (length(findall(isfinite.(getfield.(params, :high)))) > 0)
-            printstyled(color=:red, bold=true, "Parameter bounds are not supported by " * string(typeof(minimizer)) * "\n")
+            @warn "Parameter bounds are not supported by " * string(typeof(minimizer))
         end
     end
 
@@ -543,37 +355,29 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     c1d_uncert  = Vector{Float64}()
     c1d_len  = Vector{Int}()
     push!(c1d_len, 0)
-    for i in 1:length(data)
-        m = model.compiled[1]
-        if length(model.compiled) > 1
-            m = model.compiled[model.domainid[i]]
-        end
-        tmp = data[i]
-        if ndims(tmp) > 1
-            tmp = flatten(data[i], m.domain)
-        end
-        push!(c1d_measure, tmp.measure...)
-        push!(c1d_uncert , tmp.uncert...)
-        push!(c1d_len , c1d_len[end] + length(tmp))
+    for d in data
+        append!(c1d_measure, d.measure)
+        append!(c1d_uncert , d.uncert)
+        push!(c1d_len, c1d_len[end] + length(d))
     end
     c1d_results = fill(0., length(c1d_measure))
 
     # Inner function to evaluate all the models and store the result in a 1D array
+    all_ce = compiled(model)
     function evaluate1D(freepvalues::Vector{Float64})
         pvalues[ifree] .= freepvalues
         evaluate!(model, pvalues)
 
-        for i in 1:length(data)
-            rr = model.results[1]
-            if length(model.results) > 1
-                rr = model.results[i]
+        ii = 1
+        for ce in all_ce
+            for v in ce.results
+                c1d_results[c1d_len[ii]+1:c1d_len[ii+1]] .= v
+                ii += 1
             end
-            c1d_results[c1d_len[i]+1:c1d_len[i+1]] .= rr
         end
         return c1d_results
     end
 
-    #try
     (status, bestfit_val, bestfit_unc) = minimize(minimizer, evaluate1D, c1d_measure, c1d_uncert, params[ifree])
     if length(bestfit_val) != length(ifree)
         error("Length of best fit parameters ($(length(bestfit_val))) do not match number of free parameters ($(length(ifree)))")
@@ -583,29 +387,24 @@ function fit!(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abs
     uncert = fill(NaN, length(pvalues))
     uncert[ifree] .= bestfit_unc
 
-    bestfit = HashVector{FitParameter}()
-    for i in 1:length(params)
-        push!(bestfit, wnames[i], FitParameter(pvalues[i], uncert[i]))
+    bestfit = OrderedDict{Symbol, BestFitComponent}()
+    ii = 1
+    for (cname, comp) in components(model)
+        tmp = OrderedDict{Symbol, BestFitParameter}()
+        for (pname, par) in getparams(comp)
+            tmp[pname] = BestFitParameter(pvalues[ii], uncert[ii])
+            ii += 1
+        end
+        bestfit[cname] = BestFitComponent(tmp)
     end
-
-    getsetparams!(model, pvalues)
-    result = FitResult(deepcopy(minimizer), bestfit,
+    result = FitResult(deepcopy(minimizer), BestFit(bestfit),
                        length(c1d_measure),
                        length(c1d_measure) - length(ifree),
                        sum(abs2, (c1d_measure .- c1d_results) ./ c1d_uncert),
                        status, float(Base.time_ns() - elapsedTime) / 1.e9)
     return result
-    # catch err
-    #     printstyled(color=:red, err)
-    #     println()
-    #     println("Call stack:")
-    #     for s in stacktrace(catch_backtrace())
-    #         println(s)
-    #     end
-    #     println()
-    # end
 end
-fit!(model::Model, data::AbstractData; minimizer=Minimizer()) = fit!(model, [data]; minimizer=minimizer)
+fit(model::Model, data::AbstractData; minimizer=Minimizer()) = fit(model, [data]; minimizer=minimizer)
 
 
 # ====================================================================
