@@ -131,7 +131,4 @@ prepare!(model)
 result = fit(model, data)
 
 
-setcompvalue!(model, :comp1, 10)
-setcompvalue!(model, :comp1, NaN)
-
 

@@ -237,6 +237,15 @@ end
 prepare!(model::Model, domain::AbstractDomain, expr::Expr) = prepare!(model, domain, [expr])
 prepare!(model::Model, domain::AbstractDomain, s::Symbol)  = prepare!(model, domain, [:(+$s)])
 
+function prepare!(model::Model)
+    bkg = deepcopy(model)
+    empty!(getfield(model, :compiled))
+    for ce in compiled(bkg)
+        prepare!(model, ce.domain, ce.exprs)
+    end
+    return model
+end
+
 
 # --------------------------------------------------------------------
 function getceval(ce::CompiledExpression, cname::Symbol)
