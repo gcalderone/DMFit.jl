@@ -477,17 +477,17 @@ end
 # ====================================================================
 # FitParameter and FitResult structures, and associated show method.
 #
-struct BestFitParameter
+struct BestFitParam
     val::Float64
     unc::Float64
 end
 
-struct BestFitComponent
-    params::OrderedDict{Symbol, BestFitParameter}
+struct BestFitComp
+    params::OrderedDict{Symbol, BestFitParam}
 end    
 
 struct BestFit
-    comp::OrderedDict{Symbol, BestFitComponent}
+    comp::OrderedDict{Symbol, BestFitComp}
 end    
 
 struct FitResult
@@ -498,6 +498,20 @@ struct FitResult
     cost::Float64
     status::Symbol      #:Optimal, :NonOptimal, :Warn, :Error
     elapsed::Float64
+end
+
+function show(stream::IO, comp::BestFitComp)
+    color = [229, 255]
+    s = @sprintf "%5s|%20s|%10s|%10s|%10s|%10s\n"  "#" "Component" "Param." "Value" "Uncert." "Rel. unc. (%)"
+    printstyled(color=:default, stream, s)
+
+    color = sort(color)
+    count = 0
+    for (pname, par) in getfield(comp, :params)
+        count += 1
+        s = @sprintf "%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n" count "" pname par.val par.unc par.unc/par.val*100.
+        printstyled(color=color[1], stream, s)
+    end
 end
 
 

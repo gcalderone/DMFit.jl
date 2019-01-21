@@ -125,8 +125,8 @@ model.comp1.p[2].fixed = true
 prepare!(model)
 result = fit(model, data)
 
-model.comp[:comp1].p[2].expr = "comp1__p1 + comp1__p2"
-model.comp[:comp1].p[2].fixed = false
+model.comp1.p[2].expr = "comp1__p1 + comp1__p2"
+model.comp1.p[2].fixed = false
 prepare!(model)
 result = fit(model, data)
 

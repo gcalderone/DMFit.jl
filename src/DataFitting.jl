@@ -59,8 +59,8 @@ getproperty(model::Model, s::Symbol) = get(getfield(model, :comp), s, nothing)
 propertynames(res::BestFit) = collect(keys(getfield(res, :comp)))
 getproperty(res::BestFit, s::Symbol) = get(getfield(res, :comp), s, nothing)
 
-propertynames(res::BestFitComponent) = collect(keys(getfield(res, :params)))
-getproperty(res::BestFitComponent, s::Symbol) = get(getfield(res, :params), s, nothing)
+propertynames(res::BestFitComp) = collect(keys(getfield(res, :params)))
+getproperty(res::BestFitComp, s::Symbol) = get(getfield(res, :params), s, nothing)
 
 
 
@@ -265,12 +265,13 @@ domain(model::Model, id=1) = compiled(model, id).domain
 """
 Returns a component evaluation.
 """
-function getindex(model::Model, id::Int=1)
+function getindex(model::Model, id::Int=1, expr::Int=1)
     out = compiled(model, id).results
-    (length(out) == 1)  &&  (return out[1])
-    return out
+    @assert expr <= length(out) "Invalid expression index: $expr"
+    return out[expr]
 end
-getindex(model::Model, id::Int, cname::Symbol) = getceval(compiled(model, id), cname).result
+getindex(model::Model, id::Int, cname::Symbol) =
+    getceval(compiled(model, id), cname).result
 
 # --------------------------------------------------------------------
 """
@@ -396,15 +397,15 @@ function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abst
     uncert = fill(NaN, length(pvalues))
     uncert[ifree] .= bestfit_unc
 
-    bestfit = OrderedDict{Symbol, BestFitComponent}()
+    bestfit = OrderedDict{Symbol, BestFitComp}()
     ii = 1
     for (cname, comp) in components(model)
-        tmp = OrderedDict{Symbol, BestFitParameter}()
+        tmp = OrderedDict{Symbol, BestFitParam}()
         for (pname, par) in getparams(comp)
-            tmp[pname] = BestFitParameter(pvalues[ii], uncert[ii])
+            tmp[pname] = BestFitParam(pvalues[ii], uncert[ii])
             ii += 1
         end
-        bestfit[cname] = BestFitComponent(tmp)
+        bestfit[cname] = BestFitComp(tmp)
     end
     result = FitResult(deepcopy(minimizer), BestFit(bestfit),
                        length(c1d_measure),
