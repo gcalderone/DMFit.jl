@@ -1,7 +1,6 @@
 using Test
 using Random
 
-
 f(x, p1, p2, p3, p4, p5) = @. (p1  +  p2 * x  +  p3 * x^2  +  p4 * sin(p5 * x))  *  cos(x)
 
 # Actual model parameters:

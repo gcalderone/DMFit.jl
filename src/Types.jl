@@ -312,6 +312,13 @@ mutable struct Parameter
 end
 
 
+mutable struct WrapParameter
+    pname::Symbol
+    index::Int
+    par::Parameter
+end
+    
+
 function show(stream::IO, comp::AbstractComponent; color=:default, header=true, count=0, cname="")
     (header)  &&  (printstyled(color=:default, stream, bold=true, typeof(comp)); println(stream))
     if count == 0
@@ -320,26 +327,17 @@ function show(stream::IO, comp::AbstractComponent; color=:default, header=true, 
     end
 
     extraFields = false
-    for (pname, par) in getparams(comp)
+    for (pname, wparam) in getparams(comp)
+        par = wparam.par
         note = ""
         (par.fixed)  &&  (note *= "FIXED")
         (par.expr != "")  &&  (note *= " expr=" * par.expr)
         count += 1
         s = @sprintf("%5d|%20s|%10s|%10.3g|%10.3g|%10.3g|%s\n",
-                     count, cname, pname,
+                     count, cname,
+                     (wparam.index >= 1  ?  Symbol(wparam.pname, "[", wparam.index, "]")  :  pname),
                      par.val, par.low, par.high, note)
         printstyled(color=color, stream, s)
-    end
-
-    if extraFields  &&  header
-        println(stream)
-        println(stream, "Extra fields:")
-        for pname in fieldnames(typeof(comp))
-            if fieldtype(typeof(comp), pname) == Parameter
-                continue
-            end
-            println(stream, string(pname), " : ", string(fieldtype(typeof(comp), pname)))
-        end
     end
     return count
 end
@@ -483,12 +481,12 @@ struct BestFitParam
 end
 
 struct BestFitComp
-    params::OrderedDict{Symbol, BestFitParam}
+    params::OrderedDict{Symbol, Union{BestFitParam, Vector{BestFitParam}}}
 end    
 
 struct BestFit
     comp::OrderedDict{Symbol, BestFitComp}
-end    
+end
 
 struct FitResult
     fitter::AbstractMinimizer
@@ -500,18 +498,32 @@ struct FitResult
     elapsed::Float64
 end
 
-function show(stream::IO, comp::BestFitComp)
-    color = [229, 255]
-    s = @sprintf "%5s|%20s|%10s|%10s|%10s|%10s\n"  "#" "Component" "Param." "Value" "Uncert." "Rel. unc. (%)"
-    printstyled(color=:default, stream, s)
 
-    color = sort(color)
-    count = 0
-    for (pname, par) in getfield(comp, :params)
-        count += 1
-        s = @sprintf "%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n" count "" pname par.val par.unc par.unc/par.val*100.
-        printstyled(color=color[1], stream, s)
+function show(stream::IO, comp::BestFitComp; color=:default, count=0, cname="")
+    if count == 0
+        s = @sprintf "%5s|%20s|%10s|%10s|%10s|%10s\n"  "#" "Component" "Param." "Value" "Uncert." "Rel. unc. (%)"
+        printstyled(color=:default, stream, s)
     end
+    for (pname, params) in getfield(comp, :params)
+        if typeof(params) == Vector{BestFitParam}
+            for ii in 1:length(params)
+                count += 1
+                par = params[ii]
+                spname = string(pname) * "[" * string(ii) * "]"
+                s = @sprintf("%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n", count, cname,
+                             spname, par.val, par.unc, par.unc/par.val*100.)
+                printstyled(color=color, stream, s)
+            end
+        else
+            count += 1
+            par = params
+            spname = string(pname)
+            s = @sprintf("%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n", count, cname,
+                         spname, par.val, par.unc, par.unc/par.val*100.)
+            printstyled(color=color, stream, s)
+        end
+    end
+    return count
 end
 
 
@@ -520,17 +532,10 @@ function show(stream::IO, f::FitResult)
     s = @sprintf "Best fit values:\n"
     printstyled(color=:default, stream, s, bold=true)
 
-    s = @sprintf "%5s|%20s|%10s|%10s|%10s|%10s\n"  "#" "Component" "Param." "Value" "Uncert." "Rel. unc. (%)"
-    printstyled(color=:default, stream, s)
-
     color = sort(color)
     count = 0
     for (cname, comp) in getfield(f.bestfit, :comp)
-        for (pname, par) in getfield(comp, :params)
-            count += 1
-            s = @sprintf "%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n" count cname pname par.val par.unc par.unc/par.val*100.
-            printstyled(color=color[1], stream, s)
-        end
+        count = show(stream, comp, color=color[1], count=count, cname=string(cname))
         color = circshift(color, 1)
     end
 

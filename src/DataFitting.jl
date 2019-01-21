@@ -73,22 +73,23 @@ Returns number of params in a component.
 paramcount(comp::AbstractComponent) = length(getparams(comp))
 
 function getparams(comp::AbstractComponent)
-    out = OrderedDict{Symbol, Parameter}()
+    out = OrderedDict{Symbol, WrapParameter}()
     for pname in fieldnames(typeof(comp))
-        tmp = getfield(comp, pname)
-        if typeof(tmp) == Parameter
-            out[pname] = tmp
-        elseif typeof(tmp) == Vector{Parameter}
-            for i in 1:length(tmp)
-                out[Symbol(pname, i)] = tmp[i]
+        par = getfield(comp, pname)
+        if typeof(par) == Parameter
+            out[pname] = WrapParameter(pname, 0, par)
+        elseif typeof(par) == Vector{Parameter}
+            for i in 1:length(par)
+                out[Symbol(pname, i)] = WrapParameter(pname, i, par[i])
             end
         end
     end
     return out
 end
 
+
 function getparams(model::Model)
-    out = OrderedDict{Symbol, Parameter}()
+    out = OrderedDict{Symbol, WrapParameter}()
     for (cname, comp) in components(model)
         for (pname, par) in getparams(comp)
             out[Symbol(cname, "__", pname)] = par
@@ -97,7 +98,7 @@ function getparams(model::Model)
     return out
 end
 
-getparamvalues(v::Union{Model, AbstractComponent}) = [par.val for (pname, par) in getparams(v)]
+getparamvalues(v::Union{Model, AbstractComponent}) = [wpar.par.val for (pname, wpar) in getparams(v)]
 
 # --------------------------------------------------------------------
 compdata(domain::AbstractDomain, comp::AbstractComponent) =
@@ -146,7 +147,7 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
     code = Vector{String}()
     tmp = ""
     for (cname, comp) in components(model)
-        for (pname, par) in getparams(comp)
+        for (pname, wpar) in getparams(comp)
             tmp *= ", $(cname)__$(pname)::Float64"
         end
     end
@@ -158,7 +159,8 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
         if cname in compinvolved
             i = findall(cname .== compinvolved)[1]
             tmp = ""
-            for (pname, par) in getparams(comp)
+            for (pname, wpar) in getparams(comp)
+                par = wpar.par
                 (par.expr != "")  &&  (push!(code, "    $(cname)__$(pname) = " *
                                              replace(par.expr, "this__" => "$(cname)__")))
                 tmp *= ", $(cname)__$(pname)"
@@ -345,10 +347,7 @@ function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abst
     @assert length(compiled(model)) >= 1
 
     # Check if the minimizer supports bounded parameters
-    dict_params = getparams(model)
-    pnames = collect(keys(dict_params))
-    params = collect(values(dict_params))
-    
+    params = getfield.(values(getparams(model)), :par)
     pvalues = getfield.(params, :val)
     ifree = findall(.! getfield.(params, :fixed))
     @assert length(ifree) > 0 "No free parameter in the model"
@@ -400,12 +399,27 @@ function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abst
     bestfit = OrderedDict{Symbol, BestFitComp}()
     ii = 1
     for (cname, comp) in components(model)
-        tmp = OrderedDict{Symbol, BestFitParam}()
-        for (pname, par) in getparams(comp)
-            tmp[pname] = BestFitParam(pvalues[ii], uncert[ii])
-            ii += 1
+        bestfitcomp = OrderedDict{Symbol, Union{BestFitParam, Vector{BestFitParam}}}()
+        accum = Vector{BestFitParam}()
+        lastpname = :-
+        for (pname, wpar) in getparams(comp)
+            if (wpar.index == 0)  &&  (length(accum) > 0)
+                bestfitcomp[lastpname] = deepcopy(accum)
+                empty!(accum)
+            end
+
+            tmp = BestFitParam(pvalues[ii], uncert[ii]); ii += 1
+            if wpar.index == 0
+                bestfitcomp[pname] = tmp
+            else
+                push!(accum, tmp)
+                lastpname = wpar.pname
+            end
         end
-        bestfit[cname] = BestFitComp(tmp)
+        if length(accum) > 0
+            bestfitcomp[lastpname] = deepcopy(accum)
+        end
+        bestfit[cname] = BestFitComp(bestfitcomp)
     end
     result = FitResult(deepcopy(minimizer), BestFit(bestfit),
                        length(c1d_measure),
