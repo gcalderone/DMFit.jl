@@ -56,8 +56,8 @@ resetcounters!(model2)
 
 dump(result2)
 
-println(result2.bestfit.comp1.p1.val)
-println(result2.bestfit.comp1.p1.unc)
+println(result2.bestfit.comp1.p[1].val)
+println(result2.bestfit.comp1.p[1].unc)
 
 
 test_component(dom, FuncWrap(f, params...), 1000)
@@ -119,12 +119,12 @@ model.comp1.p[1].low  = -Inf
 model.comp1.p[1].high = +Inf
 
 
-model.comp1.p[2].expr = "2 * comp1__p1"
+model.comp1.p[2].expr = "2 * comp1_p1"
 model.comp1.p[2].fixed = true
 prepare!(model)
 result = fit(model, data)
 
-model.comp1.p[2].expr = "comp1__p1 + comp1__p2"
+model.comp1.p[2].expr = "comp1_p1 + comp1_p2"
 model.comp1.p[2].fixed = false
 prepare!(model)
 result = fit(model, data)

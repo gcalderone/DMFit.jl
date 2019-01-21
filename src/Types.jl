@@ -199,10 +199,10 @@ end
 # --------------------------------------------------------------------
 # Show methods
 function show(stream::IO, dom::AbstractCartesianDomain)
-    printstyled(color=:default, stream, bold=true, typeof(dom), "  length: ", length(dom), "\n")
-    s = @sprintf("%6s|%8s|%10s|%10s|%10s|%10s",
+    printstyled(stream, bold=true, typeof(dom), "  length: ", length(dom), "\n")
+    s = @sprintf("%6s|%8s|%10s|%10s|%10s|%10s\n",
                  "Dim.", "Size", "Min val", "Max val", "Min step", "Max step")
-    println(stream, s)
+    printstyled(stream, s, bold=true, color=:underline)
 
     for i in 1:ndims(dom)
         a = dom[i]
@@ -221,10 +221,10 @@ end
 
 
 function show(stream::IO, dom::AbstractLinearDomain)
-    printstyled(color=:default, stream, bold=true, typeof(dom), " length: ", length(dom), "\n")
-    s = @sprintf("%6s|%10s|%10s",
+    printstyled(stream, bold=true, typeof(dom), " length: ", length(dom), "\n")
+    s = @sprintf("%6s|%10s|%10s\n",
                  "Dim.", "Min val", "Max val")
-    println(stream, s)
+    printstyled(stream, s, bold=true, color=:underline)
 
     for i in 1:ndims(dom)
         s = @sprintf("%6d|%10.4g|%10.4g",
@@ -237,10 +237,10 @@ end
 
 # Special case for Domain_1D: treat it as a Cartesian domain, despite it is a Linear one.
 function show(stream::IO, dom::Domain_1D)
-    printstyled(color=:default, stream, bold=true, typeof(dom), " length: ", length(dom), "\n")
-    s = @sprintf("%6s|%8s|%10s|%10s|%10s|%10s",
+    printstyled(stream, bold=true, typeof(dom), " length: ", length(dom), "\n")
+    s = @sprintf("%6s|%8s|%10s|%10s|%10s|%10s\n",
                  "Dim.", "Size", "Min val", "Max val", "Min step", "Max step")
-    println(stream, s)
+    printstyled(stream, s, bold=true, color=:underline)
 
     a = dom[1]
     b = 0
@@ -258,11 +258,11 @@ end
 
 # --------------------------------------------------------------------
 function show(stream::IO, data::AbstractData)
-    printstyled(color=:default, stream, bold=true, typeof(data))
+    printstyled(stream, bold=true, typeof(data))
     println(stream, "   length: ", (length(data.measure)))
-    s = @sprintf("%8s | %10s | %10s | %10s | %10s | %10s",
+    s = @sprintf("%8s | %10s | %10s | %10s | %10s | %10s\n",
                  "", "Min", "Max", "Mean", "Median", "Stddev.")
-    println(stream, s)
+    printstyled(stream, s, bold=true, color=:underline)
 
     nonFinite = Vector{String}()
     names = fieldnames(typeof(data))
@@ -319,15 +319,16 @@ mutable struct WrapParameter
 end
     
 
-function show(stream::IO, comp::AbstractComponent; color=:default, header=true, count=0, cname="")
-    (header)  &&  (printstyled(color=:default, stream, bold=true, typeof(comp)); println(stream))
+function show(stream::IO, comp::AbstractComponent; header=true, count=0, cname="")
+    (header)  &&  (printstyled(stream, bold=true, typeof(comp)); println(stream))
     if count == 0
         s = @sprintf "%5s|%20s|%10s|%10s|%10s|%10s|%s\n"  "#" "Component" "Param." "Value" "Low" "High" "Notes"
-        printstyled(color=:default, stream, s)
+        printstyled(stream, s, bold=true, color=:underline)
     end
 
-    extraFields = false
+    localcount = 0; lastcount = length(getparams(comp))
     for (pname, wparam) in getparams(comp)
+        localcount += 1
         par = wparam.par
         note = ""
         (par.fixed)  &&  (note *= "FIXED")
@@ -337,7 +338,7 @@ function show(stream::IO, comp::AbstractComponent; color=:default, header=true, 
                      count, cname,
                      (wparam.index >= 1  ?  Symbol(wparam.pname, "[", wparam.index, "]")  :  pname),
                      par.val, par.low, par.high, note)
-        printstyled(color=color, stream, s)
+        printstyled(stream, s, color=(localcount == lastcount  ?  :underline  :  :default))
     end
     return count
 end
@@ -379,35 +380,29 @@ end
 
 show(stream::IO, mime::MIME"text/plain", model::Model) = show(stream, model)
 function show(stream::IO, model::Model)
-    color = [229, 255]
-
     s = @sprintf "Components:\n"
-    printstyled(color=:default, stream, s, bold=true)
+    printstyled(stream, s, bold=true, color=:reverse)
     compcount(model) != 0  || (return nothing)
 
     s = @sprintf "%5s|%20s|%s\n"  "#" "Component" "Type"
-    printstyled(color=:default, stream, s)
+    printstyled(stream, s, bold=true, color=:underline)
 
-    color = sort(color)
     count = 0
     for (cname, comp) in components(model)
         count += 1
-        color = circshift(color, 1)
-
         ctype = split(string(typeof(comp)), ".")
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
 
         s = @sprintf "%5d|%20s|%s\n" count string(cname) ctype
-        printstyled(color=color[1], stream, s)
+        printstyled(stream, s)
     end
     println(stream)
 
-    printstyled(color=:default, stream, "Parameters:\n", bold=true)
+    printstyled(stream, "Parameters:\n", bold=true, color=:reverse)
     count = 0
     for (cname, comp) in components(model)
-        color = circshift(color, 1)
-        count = show(stream, comp, cname=string(cname), count=count, color=color[1], header=false)
+        count = show(stream, comp, cname=string(cname), count=count, header=false)
     end
     println(stream)
     
@@ -417,11 +412,11 @@ function show(stream::IO, model::Model)
     end
     
     s = @sprintf "Domain(s):\n"
-    printstyled(color=:default, stream, s, bold=true)
+    printstyled(stream, s, bold=true, color=:reverse)
     for ii in 1:length(compiled(model))
         ce = compiled(model, ii)
         s = @sprintf "#%d:  " ii
-        printstyled(color=:default, stream, s, bold=true)
+        printstyled(stream, s, bold=true)
 
         show(stream, ce.domain)
         println(stream)
@@ -429,20 +424,16 @@ function show(stream::IO, model::Model)
 
     countexpr = 0
     s = @sprintf "Expression(s): \n"
-    printstyled(color=:default, stream, s, bold=true)
+    printstyled(stream, s, bold=true, color=:reverse)
     s = @sprintf "%3s|%10s|%7s|%10s|%10s|%10s|%10s|%10s|\n" "#" "Component" "Counter" "Min" "Max" "Mean" "NaN" "Inf"
-    printstyled(color=:default, stream, s)
+    printstyled(stream, s, bold=true, color=:underline)
 
     for ii in 1:length(compiled(model))
         ce = compiled(model, ii)
 
-        color = sort(color)
-        nonFinite = Vector{String}()
-
         for jj in 1:length(ce.compevals)
             cname = ce.compnames[jj]
             ceval = ce.compevals[jj]
-            color = circshift(color, 1)
 
             result = ceval.result
             v = view(result, findall(isfinite.(result)))
@@ -451,11 +442,12 @@ function show(stream::IO, model::Model)
             s = @sprintf("%3d|%10s|%7d|%10.3g|%10.3g|%10.3g|%10d|%10d|\n",
                          ii, cname, ceval.counter,
                          minimum(v), maximum(v), mean(v), nan, inf)
-            printstyled(color=color[1], stream, s)
+            printstyled(stream, s)
         end
-        for jj in 1:length(ce.exprs)
-            color = circshift(color, 1)
 
+        localcount = 0; lastcount = length(ce.exprs)
+        for jj in 1:length(ce.exprs)
+            localcount += 1
             result = ce.results[jj]
             v = view(result, findall(isfinite.(result)))
             nan = length(findall(isnan.(result)))
@@ -463,11 +455,11 @@ function show(stream::IO, model::Model)
             s = @sprintf("%3d|%10s|%7d|%10.3g|%10.3g|%10.3g|%10d|%10d|%s\n",
                          ii, "Expr #"*string(jj), ce.counter,
                          minimum(v), maximum(v), mean(v), nan, inf, ce.exprs[jj])
-            printstyled(color=color[1], stream, s, bold=true)
+            printstyled(stream, s, color=(localcount == lastcount  ?  :underline  :  :default))
             countexpr += 1
         end
-        println(stream)
     end
+    println(stream)
     printstyled(stream, "Total expressions: " * string(countexpr), bold=true)
 end
 
@@ -499,12 +491,14 @@ struct FitResult
 end
 
 
-function show(stream::IO, comp::BestFitComp; color=:default, count=0, cname="")
+function show(stream::IO, comp::BestFitComp; count=0, cname="")
     if count == 0
         s = @sprintf "%5s|%20s|%10s|%10s|%10s|%10s\n"  "#" "Component" "Param." "Value" "Uncert." "Rel. unc. (%)"
-        printstyled(color=:default, stream, s)
+        printstyled(stream, s, bold=true, color=:underline)
     end
+    localcount = 0;  lastcount = length(getfield(comp, :params))
     for (pname, params) in getfield(comp, :params)
+        localcount += 1
         if typeof(params) == Vector{BestFitParam}
             for ii in 1:length(params)
                 count += 1
@@ -512,7 +506,7 @@ function show(stream::IO, comp::BestFitComp; color=:default, count=0, cname="")
                 spname = string(pname) * "[" * string(ii) * "]"
                 s = @sprintf("%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n", count, cname,
                              spname, par.val, par.unc, par.unc/par.val*100.)
-                printstyled(color=color, stream, s)
+                printstyled(stream, s, color=(((localcount == lastcount)  &&  (ii == length(params)))  ?  :underline  :  :default))
             end
         else
             count += 1
@@ -520,7 +514,7 @@ function show(stream::IO, comp::BestFitComp; color=:default, count=0, cname="")
             spname = string(pname)
             s = @sprintf("%5d|%20s|%10s|%10.4g|%10.4g|%10.2g\n", count, cname,
                          spname, par.val, par.unc, par.unc/par.val*100.)
-            printstyled(color=color, stream, s)
+            printstyled(stream, s, color=(localcount == lastcount  ?  :underline  :  :default))
         end
     end
     return count
@@ -528,23 +522,20 @@ end
 
 
 function show(stream::IO, f::FitResult)
-    color = [229, 255]
     s = @sprintf "Best fit values:\n"
-    printstyled(color=:default, stream, s, bold=true)
+    printstyled(stream, s, bold=true, color=:reverse)
 
-    color = sort(color)
     count = 0
     for (cname, comp) in getfield(f.bestfit, :comp)
-        count = show(stream, comp, color=color[1], count=count, cname=string(cname))
-        color = circshift(color, 1)
+        count = show(stream, comp, count=count, cname=string(cname))
     end
 
     println(stream)
-    printstyled(color=:default, stream, "Summary:\n", bold=true)
+    printstyled(stream, "Summary:\n", bold=true, color=:reverse)
     println(stream, @sprintf("  #Data  : %10d              Cost: %10.5g", f.ndata, f.cost))
     println(stream, @sprintf("  #Param : %10d              DOF : %10d", f.ndata-f.dof, f.dof))
     println(stream, @sprintf("  Elapsed: %10.4g s            Red.: %10.4g", f.elapsed, f.cost / f.dof))
-    printstyled(color=:default, stream, "  Status :  ", bold=true)
+    printstyled(stream, "  Status :  ", bold=true)
     if f.status == :Optimal
         printstyled(color=:green, stream, "Optimal", bold=true)
     elseif f.status == :NonOptimal

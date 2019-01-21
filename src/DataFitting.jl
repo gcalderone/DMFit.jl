@@ -23,6 +23,7 @@ import Base.getproperty
 
 include("Types.jl")
 
+const compsep = "_"
 
 # ####################################################################
 # Functions
@@ -92,7 +93,7 @@ function getparams(model::Model)
     out = OrderedDict{Symbol, WrapParameter}()
     for (cname, comp) in components(model)
         for (pname, par) in getparams(comp)
-            out[Symbol(cname, "__", pname)] = par
+            out[Symbol(cname, compsep, pname)] = par
         end
     end
     return out
@@ -148,7 +149,7 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
     tmp = ""
     for (cname, comp) in components(model)
         for (pname, wpar) in getparams(comp)
-            tmp *= ", $(cname)__$(pname)::Float64"
+            tmp *= ", $(cname)$(compsep)$(pname)::Float64"
         end
     end
     push!(code, "(_ce::CompiledExpression $tmp, _unused_...) -> begin")
@@ -161,9 +162,9 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
             tmp = ""
             for (pname, wpar) in getparams(comp)
                 par = wpar.par
-                (par.expr != "")  &&  (push!(code, "    $(cname)__$(pname) = " *
-                                             replace(par.expr, "this__" => "$(cname)__")))
-                tmp *= ", $(cname)__$(pname)"
+                (par.expr != "")  &&  (push!(code, "  $(cname)$(compsep)$(pname) = " *
+                                             replace(par.expr, "this$(compsep)" => "$(cname)$(compsep)")))
+                tmp *= ", $(cname)$(compsep)$(pname)"
             end
             push!(code, "  $cname = _evaluate!(_ce.compevals[$i], _ce.domain $tmp)")
         end
