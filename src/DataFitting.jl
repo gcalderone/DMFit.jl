@@ -24,6 +24,7 @@ import Base.getproperty
 include("Types.jl")
 
 const compsep = "_"
+const showprefix = "    "
 
 # ####################################################################
 # Functions
