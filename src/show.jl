@@ -1,19 +1,29 @@
-function printmain(io::IO, args...)         ;                    printstyled(io, args..., "\n"; bold=true, color=:green); end
-function printerr( io::IO, args...)         ;                    printstyled(io, args..., "\n"; bold=true, color=:red); end
-function printtype(io::IO, args...)         ; print(io, "    "); printstyled(io, args..., "\n"; bold=true); end
-#function printhead(io::IO, args...)         ; print(io, "   ╭"); printstyled(io, args..., "\n"; color=:underline, bold=true); end
-#function printcell(io::IO, args...; u=false); print(io, "   ⋮"); printstyled(io, args..., "\n"; color=(u  ?  :underline  :  :default)); end
-
-
 mutable struct MyTablePrinter
+    prefix::String
     head::String
     rule::String
     tail::String
     width::Int
     pendingrule::Bool
+    colorcenter::Symbol
+    colormain::Symbol
+    colortable::Symbol    
 end
-const mytable = MyTablePrinter("", "", "", 0, false)
+const mytable = MyTablePrinter("  ", "", "", "", 0, false, :magenta, :green, :light_blue)
 
+function printcenter(io::IO, args...)
+    tmp = sprint(print, args...)
+    nn = Int(round((displaysize(io)[2] - length(tmp))/2))
+    tmp = join(fill(" ", nn))
+    printstyled(io, tmp, args..., "\n"; bold=true, color=mytable.colorcenter);
+end
+printmain(io::IO, args...) = printstyled(io, args...; bold=true, color=mytable.colormain)
+printerr( io::IO, args...) = printstyled(io, args..., "\n"; bold=true, color=:red)
+function printtype(io::IO, args...)
+    global mytable
+    print(io, mytable.prefix)
+    printstyled(io, args..., "\n"; bold=true)
+end
 
 function printhead(io::IO, args...)
     global mytable
@@ -30,36 +40,36 @@ function printhead(io::IO, args...)
     mytable.pendingrule = false
     
     tmp = join(fill("─", mytable.width))
-    printstyled(io, color=:light_blue, "    ╭", mytable.head, "╮\n    │")
-    printstyled(io, bold=true, color=:light_blue, args..., "")
-    printstyled(io, color=:light_blue, "│")
+    printstyled(io, color=mytable.colortable, mytable.prefix, "╭", mytable.head, "╮\n", mytable.prefix, "│")
+    printstyled(io, bold=true, color=mytable.colortable, args..., "")
+    printstyled(io, color=mytable.colortable, "│")
     println(io)
 end
 function printcell(io::IO, args...; lastingroup=false, tail=false)
     global mytable
     if mytable.pendingrule
         tmp = join(fill("─", mytable.width))
-        printstyled(io, color=:light_blue, "    ├")
+        printstyled(io, color=mytable.colortable, mytable.prefix, "├")
         print(io, mytable.rule)
-        printstyled(io, color=:light_blue, "┤")
+        printstyled(io, color=mytable.colortable, "┤")
         println(io)
         mytable.pendingrule = false
     else
         mytable.pendingrule = lastingroup
     end
-    printstyled(io, color=:light_blue, "    │")
-    print(io, args...)
+    printstyled(io, color=mytable.colortable, mytable.prefix, "│")
+    printstyled(io, args...)#, color=(lastingroup ? :underline : :default))
     tmp = length(sprint(print, args...))+1
     if tmp <= mytable.width
         tmp = join(fill(" ", mytable.width-tmp))
-        printstyled(io, color=:light_blue, tmp, "│")
+        printstyled(io, color=mytable.colortable, tmp, "│")
     end
     println(io)
 end
 function printtail(io::IO)
     global mytable
     tmp = join(fill("─", mytable.width))
-    printstyled(io, color=:light_blue, "    ╰", mytable.tail, "╯\n")
+    printstyled(io, color=mytable.colortable, mytable.prefix, "╰", mytable.tail, "╯\n")
     mytable.pendingrule = false
 end
 
@@ -191,10 +201,11 @@ end
 
 show(io::IO, mime::MIME"text/plain", model::Model) = show(io, model)
 function show(io::IO, model::Model)
-    printmain(io, @sprintf "Components:")
+    printcenter(io, " ==== MODEL DEFINITION ====")
+    printmain(io, @sprintf "Components:\n")
     compcount(model) != 0  || (return nothing)
 
-    printhead(io, @sprintf "%5s │ %20s │ %s"  "#" "Component" "Type")
+    printhead(io, @sprintf "%5s │ %20s │ %20s"  "#" "Component" "Type")
     count = 0
     for (cname, comp) in components(model)
         count += 1
@@ -202,13 +213,13 @@ function show(io::IO, model::Model)
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
 
-        s = @sprintf "%5d │ %20s │ %s" count string(cname) ctype
+        s = @sprintf "%5d │ %20s │ %20s" count string(cname) ctype
         printcell(io, s)
     end
     printtail(io)
     println(io)
 
-    printmain(io, "Parameters:")
+    printmain(io, "Parameters:\n")
     count = 0
     for (cname, comp) in components(model)
         count = show(io, comp, cname=string(cname), count=count, header=false)
@@ -217,54 +228,54 @@ function show(io::IO, model::Model)
     println(io)
 
     if length(compiled(model)) == 0
-        printmain(io, "Total expressions: 0")
+        printmain(io, "Total expressions: 0\n")
         return nothing
     end
-
-    printmain(io, "Domain(s):")
+    
+    countexpr = 0
     for ii in 1:length(compiled(model))
         ce = compiled(model, ii)
-        printmain(io, @sprintf "#%d:  " ii)
+        printcenter(io, " ==== INSTRUMENT $ii () ====")
+        printmain(io, "Domain: ")
         show(io, ce.domain)
         println(io)
-    end
 
-    countexpr = 0
-    printmain(io, "Expression(s): ")
-    printhead(io, @sprintf "%3s │ %10s │ %7s │ %10s │ %10s │ %10s │ %10s │ %10s │ " "#" "Component" "Counter" "Min" "Max" "Mean" "NaN" "Inf")
-    for ii in 1:length(compiled(model))
-        ce = compiled(model, ii)
+        printmain(io, "Expression(s):\n")
+        printhead(io, @sprintf "%3s │ %10s │ %7s │ %10s │ %10s │ %10s │ %10s │ %10s │ " "#" "Component" "Counter" "Min" "Max" "Mean" "NaN" "Inf")
+        for ii in 1:length(compiled(model))
+            ce = compiled(model, ii)
 
-        for jj in 1:length(ce.compevals)
-            cname = ce.compnames[jj]
-            ceval = ce.compevals[jj]
+            for jj in 1:length(ce.compevals)
+                cname = ce.compnames[jj]
+                ceval = ce.compevals[jj]
+                
+                result = ceval.result
+                v = view(result, findall(isfinite.(result)))
+                nan = length(findall(isnan.(result)))
+                inf = length(findall(isinf.(result)))
+                printcell(io, @sprintf("%3d │ %10s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %10d │ %10d │ ",
+                                       ii, cname, ceval.counter,
+                                       minimum(v), maximum(v), mean(v), nan, inf))
+            end
 
-            result = ceval.result
-            v = view(result, findall(isfinite.(result)))
-            nan = length(findall(isnan.(result)))
-            inf = length(findall(isinf.(result)))
-            printcell(io, @sprintf("%3d │ %10s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %10d │ %10d │ ",
-                                   ii, cname, ceval.counter,
-                                   minimum(v), maximum(v), mean(v), nan, inf))
+            localcount = 0; lastcount = length(ce.exprs)
+            for jj in 1:length(ce.exprs)
+                localcount += 1
+                result = ce.results[jj]
+                v = view(result, findall(isfinite.(result)))
+                nan = length(findall(isnan.(result)))
+                inf = length(findall(isinf.(result)))
+                printcell(io, lastingroup=(localcount == lastcount),
+                          @sprintf("%3d │ %10s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %10d │ %10d │ %s",
+                                   ii, "Expr #"*string(jj), ce.counter,
+                                   minimum(v), maximum(v), mean(v), nan, inf, ce.exprs[jj]))
+                countexpr += 1
+            end
         end
-
-        localcount = 0; lastcount = length(ce.exprs)
-        for jj in 1:length(ce.exprs)
-            localcount += 1
-            result = ce.results[jj]
-            v = view(result, findall(isfinite.(result)))
-            nan = length(findall(isnan.(result)))
-            inf = length(findall(isinf.(result)))
-            printcell(io, lastingroup=(localcount == lastcount),
-                      @sprintf("%3d │ %10s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %10d │ %10d │ %s",
-                               ii, "Expr #"*string(jj), ce.counter,
-                               minimum(v), maximum(v), mean(v), nan, inf, ce.exprs[jj]))
-            countexpr += 1
-        end
+        printtail(io)
+        println(io)
     end
-    printtail(io)
-    println(io)
-    printmain(io, "Total expressions: ", countexpr)
+    printmain(io, "Total expressions: ", countexpr, "\n")
 end
 
 
@@ -298,7 +309,8 @@ end
 
 
 function show(io::IO, f::FitResult)
-    printmain(io, @sprintf "Best fit values:")
+    printcenter(io, " ==== FIT RESULTS ====")    
+    printmain(io, @sprintf "Best fit values:\n")
 
     count = 0
     for (cname, comp) in getfield(f.bestfit, :comp)
@@ -307,7 +319,7 @@ function show(io::IO, f::FitResult)
     printtail(io)
 
     println(io)
-    printmain(io, "Summary:")
+    printmain(io, "Summary:\n")
     println(io, @sprintf("    #Data  : %10d              Cost: %10.5g", f.ndata, f.cost))
     println(io, @sprintf("    #Param : %10d              DOF : %10d", f.ndata-f.dof, f.dof))
     println(io, @sprintf("    Elapsed: %10.4g s            Red.: %10.4g", f.elapsed, f.cost / f.dof))
