@@ -8,14 +8,13 @@ using DataStructures
 export test_component,
     Domain, CartesianDomain, getaxismin, getaxismax, getaxisextrema,
     Measures, FuncWrap, SimpleParam, flatten,
-    Model, domain, evalcounter, resetcounters!,
-    prepare!, evaluate!, fit
+    Model, addcomponent!, addinstrument!, domain, evalcounter, resetcounters!,
+    addinstrument!, evaluate!, fit
 
 # ====================================================================
 import Base.show
 import Base.ndims
 import Base.size
-import Base.push!
 import Base.length
 import Base.getindex
 import Base.propertynames
@@ -37,8 +36,8 @@ const showprefix = "    "
 
 Constructor for the `Model` structure.
 """
-Model(args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N} = push!(Model(), args...)
-function push!(model::Model, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
+Model(args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N} = addcomponent!(Model(), args...)
+function addcomponent!(model::Model, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
     for c in args
         getfield(model, :comp)[c[1]] = c[2]
     end
@@ -47,10 +46,10 @@ end
 
 compcount(model::Model) = length(getfield(model, :comp))
 components(model::Model) = getfield(model, :comp)
-compiled(model::Model) = getfield(model, :compiled)
+instruments(model::Model) = getfield(model, :instruments)
 
-function compiled(model::Model, id::Int)
-    c = compiled(model)
+function instruments(model::Model, id::Int)
+    c = instruments(model)
     @assert length(c) >= 1 "No model has been compiled"
     @assert 1 <= id <= length(c) "Invalid index (allowed range: 1 : " * string(length(c)) * ")"
     return c[id]
@@ -109,7 +108,7 @@ compdata(domain::AbstractDomain, comp::AbstractComponent) =
 
 
 # ____________________________________________________________________
-function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
+function Instrument(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
     function parse_model_expr(expr::Union{Symbol, Expr}, cnames, accum=Vector{Symbol}())
         if typeof(expr) == Expr
             # Parse the expression to check which components are involved
@@ -154,7 +153,7 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
             tmp *= ", $(cname)$(compsep)$(pname)::Float64"
         end
     end
-    push!(code, "(_ce::CompiledExpression $tmp, _unused_...) -> begin")
+    push!(code, "(_instrument::Instrument $tmp, _unused_...) -> begin")
     # The last argument, _unused_, allows to push! further
     # components in the model after an expression has already been
     # prepared
@@ -168,16 +167,16 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
                                              replace(par.expr, "this$(compsep)" => "$(cname)$(compsep)")))
                 tmp *= ", $(cname)$(compsep)$(pname)"
             end
-            push!(code, "  $cname = _evaluate!(_ce.compevals[$i], _ce.domain $tmp)")
+            push!(code, "  $cname = _evaluate!(_instrument.compevals[$i], _instrument.domain $tmp)")
         end
     end
 
     results = Vector{Vector{Float64}}()
     for i in 1:length(exprs)
-        push!(code, "  @. _ce.results[$i] = (" * string(exprs[i]) * ")")
+        push!(code, "  @. _instrument.results[$i] = (" * string(exprs[i]) * ")")
         push!(results, Vector{Float64}(undef, length(domain)))
     end
-    push!(code, "  _ce.counter += 1")
+    push!(code, "  _instrument.counter += 1")
     push!(code, "  return nothing")
     push!(code, "end")
     funct = eval(Meta.parse(join(code, "\n")))
@@ -193,9 +192,9 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
         end
     end
 
-    return CompiledExpression(join(code, "\n"), funct, 0,
-                              deepcopy(domain), deepcopy(exprs), results,
-                              compinvolved, compevals)
+    return Instrument("none", join(code, "\n"), funct, 0,
+                      deepcopy(domain), deepcopy(exprs), results,
+                      compinvolved, compevals)
 end
     
 # ____________________________________________________________________
@@ -215,11 +214,11 @@ function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
     return c.result
 end
 
-_evaluate!(ce::CompiledExpression, pvalues::Vector{Float64}) = Base.invokelatest(ce.funct, ce, pvalues...)
+_evaluate!(instrument::Instrument, pvalues::Vector{Float64}) = Base.invokelatest(instrument.funct, instrument, pvalues...)
 
 function evaluate!(model::Model, pvalues::Vector{Float64})
-    for ce in compiled(model)
-        _evaluate!(ce, pvalues)
+    for instrument in instruments(model)
+        _evaluate!(instrument, pvalues)
     end
     return model
 end
@@ -229,34 +228,34 @@ evaluate!(model::Model) = evaluate!(model, getparamvalues(model))
 
 # ____________________________________________________________________
 """
-# prepare!
+# addinstrument!
 
 Prepare a model to be evaluated on the given domain, with the given
 mathematical expression.
 """
-function prepare!(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
-    push!(compiled(model), CompiledExpression(model, domain, exprs))
+function addinstrument!(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
+    push!(instruments(model), Instrument(model, domain, exprs))
     evaluate!(model)
     return model
 end
-prepare!(model::Model, domain::AbstractDomain, expr::Expr) = prepare!(model, domain, [expr])
-prepare!(model::Model, domain::AbstractDomain, s::Symbol)  = prepare!(model, domain, [:(+$s)])
+addinstrument!(model::Model, domain::AbstractDomain, expr::Expr) = addinstrument!(model, domain, [expr])
+addinstrument!(model::Model, domain::AbstractDomain, s::Symbol)  = addinstrument!(model, domain, [:(+$s)])
 
-function prepare!(model::Model)
+function addinstrument!(model::Model)
     bkg = deepcopy(model)
-    empty!(getfield(model, :compiled))
-    for ce in compiled(bkg)
-        prepare!(model, ce.domain, ce.exprs)
+    empty!(getfield(model, :instruments))
+    for instrument in instruments(bkg)
+        addinstrument!(model, instrument.domain, instrument.exprs)
     end
     return model
 end
 
 
 # ____________________________________________________________________
-function getceval(ce::CompiledExpression, cname::Symbol)
-    i = findall(ce.compnames .== cname)
+function getceval(instrument::Instrument, cname::Symbol)
+    i = findall(instrument.compnames .== cname)
     @assert length(i) == 1 "No component named $cname involved in compiled expression"
-    return ce.compevals[i[1]]
+    return instrument.compevals[i[1]]
 end
 
 """
@@ -264,19 +263,19 @@ end
 
 Return the domain associated to a model.
 """
-domain(model::Model, id=1) = compiled(model, id).domain
+domain(model::Model, id=1) = instruments(model, id).domain
 
 
 """
 Returns a component evaluation.
 """
 function getindex(model::Model, id::Int=1, expr::Int=1)
-    out = compiled(model, id).results
+    out = instruments(model, id).results
     @assert expr <= length(out) "Invalid expression index: $expr"
     return out[expr]
 end
 getindex(model::Model, id::Int, cname::Symbol) =
-    getceval(compiled(model, id), cname).result
+    getceval(instruments(model, id), cname).result
 
 # ____________________________________________________________________
 """
@@ -284,14 +283,14 @@ getindex(model::Model, id::Int, cname::Symbol) =
 
 Return the number of times the model has been evaluated.
 """
-evalcounter(model::Model, id::Int=1) = compiled(model, id).counter
+evalcounter(model::Model, id::Int=1) = instruments(model, id).counter
 
 """
 # evalcounter
 
 Return the number of times a component has been evaluated.
 """
-evalcounter(model::Model, id::Int, cname::Symbol) = getceval(compiled(model, id), cname).counter
+evalcounter(model::Model, id::Int, cname::Symbol) = getceval(instruments(model, id), cname).counter
 
 """
 # resetcounters!
@@ -299,9 +298,9 @@ evalcounter(model::Model, id::Int, cname::Symbol) = getceval(compiled(model, id)
 Reset model and components evaluation counters.
 """
 function resetcounters!(model::Model)
-    for ce in compiled(model)
-        ce.counter = 0
-        for ceval in ce.compevals
+    for instrument in instruments(model)
+        instrument.counter = 0
+        for ceval in instrument.compevals
             ceval.counter = 0
         end
     end
@@ -311,7 +310,7 @@ end
 # ____________________________________________________________________
 function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, iter=1)
     model = Model(:test => comp)
-    prepare!(model, domain, :(+test))
+    addinstrument!(model, domain, :(+test))
 
     printstyled(color=:magenta, bold=true, "First evaluation:\n")
     @time result = evaluate!(model)
@@ -322,7 +321,7 @@ function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, i
         @time begin
             for i in 1:iter
                 result = evaluate!(model)
-                compiled(model, 1).compevals[1].lastParams[1] = NaN  # Force re-calculation
+                instruments(model, 1).compevals[1].lastParams[1] = NaN  # Force re-calculation
             end
         end
     end
@@ -347,7 +346,7 @@ function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abst
     elapsedTime = Base.time_ns()
 
     @assert typeof(minimizer) <: AbstractMinimizer
-    @assert length(compiled(model)) >= 1
+    @assert length(instruments(model)) >= 1
 
     # Check if the minimizer supports bounded parameters
     params = getfield.(values(getparams(model)), :par)
@@ -375,14 +374,14 @@ function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abst
     c1d_results = fill(0., length(c1d_measure))
 
     # Inner function to evaluate all the models and store the result in a 1D array
-    all_ce = compiled(model)
+    all_instrument = instruments(model)
     function evaluate1D(freepvalues::Vector{Float64})
         pvalues[ifree] .= freepvalues
         evaluate!(model, pvalues)
 
         ii = 1
-        for ce in all_ce
-            for v in ce.results
+        for instrument in all_instrument
+            for v in instrument.results
                 c1d_results[c1d_len[ii]+1:c1d_len[ii+1]] .= v
                 ii += 1
             end

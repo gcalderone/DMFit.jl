@@ -218,7 +218,7 @@ end
 
 
 # ====================================================================
-# CompEvaluation, CompiledExpression and Model structure
+# CompEvaluation, Instrument and Model structure
 #
 mutable struct CompEvaluation
     counter::Int
@@ -228,7 +228,8 @@ mutable struct CompEvaluation
 end
 
 
-mutable struct CompiledExpression
+mutable struct Instrument
+    label::String
     code::String
     funct::Function
     counter::Int
@@ -244,9 +245,9 @@ end
 
 mutable struct Model <: AbstractDict{Symbol, AbstractComponent}
     comp::OrderedDict{Symbol, AbstractComponent}
-    compiled::Vector{CompiledExpression}
+    instruments::Vector{Instrument}
     Model() = new(OrderedDict{Symbol, AbstractComponent}(),
-                  Vector{CompiledExpression}())
+                  Vector{Instrument}())
 end
 
 
