@@ -235,11 +235,13 @@ mutable struct Instrument
     counter::Int
 
     domain::AbstractDomain
-    exprs::Vector{Expr}
-    results::Vector{Vector{Float64}}
-
     compnames::Vector{Symbol}  # only involved components
     compevals::Vector{CompEvaluation}
+
+    exprnames::Vector{Symbol}
+    exprs::Vector{Expr}
+    exprcmp::Vector{Bool}
+    exprevals::Vector{Vector{Float64}}
 end
 
 

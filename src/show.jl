@@ -75,13 +75,6 @@ function printtail(io::IO)
 end
 
 
-# │  ⃒  ◤
-# ╭────┬─────╮
-# │    │     │
-# ├────┼─────┤
-# ╰────┴─────╯
-
-
 function show(io::IO, dom::AbstractCartesianDomain)
     printsub(io, "Cartesian domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
     s = @sprintf("%3s │ %8s │ %10s │ %10s │ %10s │ %10s",
@@ -240,7 +233,7 @@ function show(io::IO, model::Model)
         println(io)
 
         printsub(io, "Expression(s):")
-        printhead(io, @sprintf "%-15s │ %7s │ %10s │ %10s │ %10s │ %7s │ %-20s " "Component" "Counter" "Min" "Max" "Mean" "NaN+Inf" "Expr")
+        printhead(io, @sprintf "%2s%-15s │ %7s │ %10s │ %10s │ %10s │ %7s │ %-20s " "" "Component" "Counter" "Min" "Max" "Mean" "NaN+Inf" "Expr")
 
         for jj in 1:length(instrument.compevals)
             cname = instrument.compnames[jj]
@@ -250,8 +243,8 @@ function show(io::IO, model::Model)
             v = view(result, findall(isfinite.(result)))
             nan = length(findall(isnan.(result)))
             inf = length(findall(isinf.(result)))
-            printcell(io, @sprintf("%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ ",
-                                   cname, ceval.counter,
+            printcell(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ ",
+                                   "", cname, ceval.counter,
                                    minimum(v), maximum(v), mean(v), nan+inf),
                       lastingroup=(jj==length(instrument.compevals)))
         end
@@ -259,13 +252,14 @@ function show(io::IO, model::Model)
         localcount = 0; lastcount = length(instrument.exprs)
         for jj in 1:length(instrument.exprs)
             localcount += 1
-            result = instrument.results[jj]
+            result = instrument.exprevals[jj]
             v = view(result, findall(isfinite.(result)))
             nan = length(findall(isnan.(result)))
             inf = length(findall(isinf.(result)))
             printcell(io, lastingroup=(localcount == lastcount),
-                      @sprintf("%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ %s",
-                               "Expr #"*string(jj), instrument.counter,
+                      @sprintf("%-2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ %s",
+                               (!instrument.exprcmp[jj]  ?  "⇒"  :  ""),
+                               instrument.exprnames[jj], instrument.counter,
                                minimum(v), maximum(v), mean(v), nan+inf, instrument.exprs[jj]))
             countexpr += 1
         end

@@ -8,7 +8,7 @@ using DataStructures
 export test_component,
     Domain, CartesianDomain, getaxismin, getaxismax, getaxisextrema,
     Measures, FuncWrap, SimpleParam, flatten,
-    Model, addcomponent!, addinstrument!, domain, evalcounter, resetcounters!,
+    Model, addcomponent!, addinstrument!, addexpr!, domain, evalcounter, resetcounters!,
     addinstrument!, evaluate!, fit
 
 # ====================================================================
@@ -106,9 +106,20 @@ getparamvalues(v::Union{Model, AbstractComponent}) = [wpar.par.val for (pname, w
 compdata(domain::AbstractDomain, comp::AbstractComponent) =
     error("Component " * string(typeof(comp)) * " must implement its own version of `compdata`.")
 
-
 # ____________________________________________________________________
-function Instrument(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
+addexpr!(model::Model, expr::Expr         ; kw...) = addexpr!(model, 1, [expr]       ; kw...)
+addexpr!(model::Model, symbol::Symbol     ; kw...) = addexpr!(model, 1, [:(+$symbol)]; kw...)
+addexpr!(model::Model, exprs::Vector{Expr}; kw...) = addexpr!(model, 1, exprs        ; kw...)
+addexpr!(model::Model, id::Int, expr::Expr; kw...) = addexpr!(model, id, [expr]      ; kw...)
+addexpr!(model::Model, id::Int, s::Symbol ; kw...) = addexpr!(model, id, [:(+$s)]    ; kw...)
+function addexpr!(model::Model, id::Int, exprs::Vector{Expr};
+                  labels=Vector{Symbol}(), cmp=Vector{Bool}())
+    instrument = instruments(model, id)
+    (length(labels) == 0)  && (labels = Symbol.(Ref(:expr), length(instrument.exprs)+1:length(instrument.exprs)+length(exprs)))
+    (length(cmp) == 0)  && (cmp = fill(false, length(exprs)))
+    @assert length(labels) == length(exprs)
+    @assert length(cmp) == length(exprs)
+    
     function parse_model_expr(expr::Union{Symbol, Expr}, cnames, accum=Vector{Symbol}())
         if typeof(expr) == Expr
             # Parse the expression to check which components are involved
@@ -171,10 +182,10 @@ function Instrument(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
         end
     end
 
-    results = Vector{Vector{Float64}}()
+    exprevals = Vector{Vector{Float64}}()
     for i in 1:length(exprs)
-        push!(code, "  @. _instrument.results[$i] = (" * string(exprs[i]) * ")")
-        push!(results, Vector{Float64}(undef, length(domain)))
+        push!(code, "  @. _instrument.exprevals[$i] = (" * string(exprs[i]) * ")")
+        push!(exprevals, Vector{Float64}(undef, length(instrument.domain)))
     end
     push!(code, "  _instrument.counter += 1")
     push!(code, "  return nothing")
@@ -184,17 +195,25 @@ function Instrument(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
     compevals = Vector{CompEvaluation}()
     for (cname, comp) in components(model)
         if cname in compinvolved
-            tmp = CompEvaluation(0, compdata(domain, comp),
+            tmp = CompEvaluation(0, compdata(instrument.domain, comp),
                                  Vector{Float64}(undef, paramcount(comp)),
-                                 Vector{Float64}(undef, length(domain)))
+                                 Vector{Float64}(undef, length(instrument.domain)))
             tmp.lastParams .= NaN
             push!(compevals, tmp)
         end
     end
 
-    return Instrument("none", join(code, "\n"), funct, 0,
-                      deepcopy(domain), deepcopy(exprs), results,
-                      compinvolved, compevals)
+    instrument.code = join(code, "\n")
+    instrument.funct = funct
+    instrument.counter = 0
+    instrument.compnames = unique([instrument.compnames; compinvolved])
+    append!(instrument.compevals, compevals)
+    append!(instrument.exprnames, deepcopy(labels))
+    append!(instrument.exprs, deepcopy(exprs))
+    append!(instrument.exprcmp, cmp)
+    append!(instrument.exprevals, exprevals)
+    evaluate!(model)
+    return model
 end
     
 # ____________________________________________________________________
@@ -233,22 +252,25 @@ evaluate!(model::Model) = evaluate!(model, getparamvalues(model))
 Prepare a model to be evaluated on the given domain, with the given
 mathematical expression.
 """
-function addinstrument!(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
-    push!(instruments(model), Instrument(model, domain, exprs))
-    evaluate!(model)
-    return model
-end
-addinstrument!(model::Model, domain::AbstractDomain, expr::Expr) = addinstrument!(model, domain, [expr])
-addinstrument!(model::Model, domain::AbstractDomain, s::Symbol)  = addinstrument!(model, domain, [:(+$s)])
 
-function addinstrument!(model::Model)
-    bkg = deepcopy(model)
-    empty!(getfield(model, :instruments))
-    for instrument in instruments(bkg)
-        addinstrument!(model, instrument.domain, instrument.exprs)
-    end
+function addinstrument!(model::Model, domain::AbstractDomain; label="none")
+    funct = ()->nothing
+    push!(instruments(model), Instrument(label, "", funct, 0, deepcopy(domain),
+                                         Vector{Symbol}(), Vector{CompEvaluation}(),
+                                         Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}()))
     return model
 end
+
+
+
+# function addinstrument!(model::Model)
+#     bkg = deepcopy(model)
+#     empty!(getfield(model, :instruments))
+#     for instrument in instruments(bkg)
+#         addinstrument!(model, instrument.domain, instrument.exprs)
+#     end
+#     return model
+# end
 
 
 # ____________________________________________________________________
@@ -270,7 +292,7 @@ domain(model::Model, id=1) = instruments(model, id).domain
 Returns a component evaluation.
 """
 function getindex(model::Model, id::Int=1, expr::Int=1)
-    out = instruments(model, id).results
+    out = instruments(model, id).exprevals
     @assert expr <= length(out) "Invalid expression index: $expr"
     return out[expr]
 end
@@ -381,7 +403,7 @@ function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abst
 
         ii = 1
         for instrument in all_instrument
-            for v in instrument.results
+            for v in instrument.exprevals
                 c1d_results[c1d_len[ii]+1:c1d_len[ii+1]] .= v
                 ii += 1
             end

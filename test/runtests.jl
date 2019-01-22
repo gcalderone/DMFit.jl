@@ -21,7 +21,8 @@ dom = Domain(x)
 data = Measures(y + noise, 1.)
 
 model1 = Model(:comp1 => FuncWrap(f, params...))
-addinstrument!(model1, dom, :comp1)
+addinstrument!(model1, dom)
+addexpr!(model1, 1, :comp1)
 
 model1.comp1.p[1].val = 1
 model1.comp1.p[2].val = 1.e-3
@@ -36,7 +37,8 @@ f3(x) = cos.(x)
 model2 = Model(:comp1 => FuncWrap(f1, params[1], params[2], params[3]),
                :comp2 => FuncWrap(f2, params[4], params[5]),
                :comp3 => FuncWrap(f3))
-addinstrument!(model2, dom, :((comp1 + comp2) * comp3))
+addinstrument!(model2, dom)
+addexpr!(model2, :((comp1 + comp2) * comp3))
 result2 = fit(model2, data)
 
 
