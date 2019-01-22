@@ -22,6 +22,7 @@ import Base.propertynames
 import Base.getproperty
 
 include("Types.jl")
+include("show.jl")
 
 const compsep = "_"
 const showprefix = "    "
@@ -30,7 +31,7 @@ const showprefix = "    "
 # Functions
 #
 
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 """
 # Model
 
@@ -66,7 +67,7 @@ getproperty(res::BestFitComp, s::Symbol) = get(getfield(res, :params), s, nothin
 
 
 
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 """
 # paramcount
 
@@ -102,12 +103,12 @@ end
 
 getparamvalues(v::Union{Model, AbstractComponent}) = [wpar.par.val for (pname, wpar) in getparams(v)]
 
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 compdata(domain::AbstractDomain, comp::AbstractComponent) =
     error("Component " * string(typeof(comp)) * " must implement its own version of `compdata`.")
 
 
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{Expr})
     function parse_model_expr(expr::Union{Symbol, Expr}, cnames, accum=Vector{Symbol}())
         if typeof(expr) == Expr
@@ -197,7 +198,7 @@ function CompiledExpression(model::Model, domain::AbstractDomain, exprs::Vector{
                               compinvolved, compevals)
 end
     
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
     if c.counter == 0
         c.counter += 1
@@ -226,7 +227,7 @@ end
 evaluate!(model::Model) = evaluate!(model, getparamvalues(model))
 
 
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 """
 # prepare!
 
@@ -251,7 +252,7 @@ function prepare!(model::Model)
 end
 
 
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 function getceval(ce::CompiledExpression, cname::Symbol)
     i = findall(ce.compnames .== cname)
     @assert length(i) == 1 "No component named $cname involved in compiled expression"
@@ -277,7 +278,7 @@ end
 getindex(model::Model, id::Int, cname::Symbol) =
     getceval(compiled(model, id), cname).result
 
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 """
 # evalcounter
 
@@ -307,7 +308,7 @@ function resetcounters!(model::Model)
 end
 
 
-# --------------------------------------------------------------------
+# ____________________________________________________________________
 function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, iter=1)
     model = Model(:test => comp)
     prepare!(model, domain, :(+test))
