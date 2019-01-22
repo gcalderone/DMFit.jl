@@ -6,11 +6,10 @@ mutable struct PrintSettings
     width::Int
     pendingrule::Bool
     simple::Bool
-    colorcenter::Symbol
     colormain::Symbol
     colortable::Symbol    
 end
-const ps = PrintSettings("  ", "", "", "", 0, false, false, :magenta, :green, :light_blue)
+const ps = PrintSettings("  ", "", "", "", 0, false, false, :yellow, :light_blue)
 
 printerr( io::IO, args...) = printstyled(io, args..., "\n"; bold=true, color=:red)
 function printmain(io::IO, args...; newline=true)
@@ -241,7 +240,7 @@ function show(io::IO, model::Model)
         println(io)
 
         printsub(io, "Expression(s):")
-        printhead(io, @sprintf "%3s │ %-15s │ %7s │ %10s │ %10s │ %10s │ %7s │ %-20s " "#" "Component" "Counter" "Min" "Max" "Mean" "NaN+Inf" "Expr")
+        printhead(io, @sprintf "%-15s │ %7s │ %10s │ %10s │ %10s │ %7s │ %-20s " "Component" "Counter" "Min" "Max" "Mean" "NaN+Inf" "Expr")
 
         for jj in 1:length(instrument.compevals)
             cname = instrument.compnames[jj]
@@ -251,9 +250,10 @@ function show(io::IO, model::Model)
             v = view(result, findall(isfinite.(result)))
             nan = length(findall(isnan.(result)))
             inf = length(findall(isinf.(result)))
-            printcell(io, @sprintf("%3s │ %-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ ",
-                                   "", cname, ceval.counter,
-                                   minimum(v), maximum(v), mean(v), nan+inf))
+            printcell(io, @sprintf("%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ ",
+                                   cname, ceval.counter,
+                                   minimum(v), maximum(v), mean(v), nan+inf),
+                      lastingroup=(jj==length(instrument.compevals)))
         end
 
         localcount = 0; lastcount = length(instrument.exprs)
@@ -264,8 +264,8 @@ function show(io::IO, model::Model)
             nan = length(findall(isnan.(result)))
             inf = length(findall(isinf.(result)))
             printcell(io, lastingroup=(localcount == lastcount),
-                      @sprintf("%3d │ %-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ %s",
-                               jj, "Expr #"*string(jj), instrument.counter,
+                      @sprintf("%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ %s",
+                               "Expr #"*string(jj), instrument.counter,
                                minimum(v), maximum(v), mean(v), nan+inf, instrument.exprs[jj]))
             countexpr += 1
         end
@@ -278,7 +278,7 @@ end
 
 function show(io::IO, comp::BestFitComp; count=0, cname="")
     if count == 0
-        printhead(io, @sprintf "%3s │ %20s │ %10s │ %10s │ %10s │ %10s"  "#" "Component" "Param." "Value" "Uncert." "Rel.unc.(%)")
+        printhead(io, @sprintf "%-15s │ %-10s │ %10s │ %10s │ %10s"  "Component" "Param." "Value" "Uncert." "Rel.unc.(%)")
     end
     localcount = 0;  lastcount = length(getfield(comp, :params))
     for (pname, params) in getfield(comp, :params)
@@ -289,14 +289,14 @@ function show(io::IO, comp::BestFitComp; count=0, cname="")
                 par = params[ii]
                 spname = string(pname) * "[" * string(ii) * "]"
                 printcell(io, lastingroup=((localcount == lastcount)  &&  (ii == length(params))),
-                                 @sprintf("%3d │ %20s │ %10s │ %10.4g │ %10.4g │ %10.2g", count, cname,
+                                 @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
                                           spname, par.val, par.unc, par.unc/par.val*100.))
             end
         else
             count += 1
             par = params
             spname = string(pname)
-            s = @sprintf("%3d │ %20s │ %10s │ %10.4g │ %10.4g │ %10.2g", count, cname,
+            s = @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
                          spname, par.val, par.unc, par.unc/par.val*100.)
             printcell(io, s, lastingroup=(localcount == lastcount))
         end
@@ -315,7 +315,6 @@ function show(io::IO, f::FitResult)
     printtail(io)
 
     println(io)
-    printsub(io, "Summary:")
     println(io, @sprintf("    #Data  : %10d              Cost: %10.5g", f.ndata, f.cost))
     println(io, @sprintf("    #Param : %10d              DOF : %10d", f.ndata-f.dof, f.dof))
     println(io, @sprintf("    Elapsed: %10.4g s            Red.: %10.4g", f.elapsed, f.cost / f.dof))
