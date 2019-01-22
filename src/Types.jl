@@ -230,11 +230,12 @@ end
 
 mutable struct Instrument
     label::String
+    domain::AbstractDomain
+
     code::String
     funct::Function
     counter::Int
 
-    domain::AbstractDomain
     compnames::Vector{Symbol}  # only involved components
     compevals::Vector{CompEvaluation}
 
@@ -243,7 +244,10 @@ mutable struct Instrument
     exprcmp::Vector{Bool}
     exprevals::Vector{Vector{Float64}}
 end
-
+Instrument(label::String, dom::AbstractDomain) = 
+    Instrument(label, deepcopy(dom), "", ()->nothing, 0,
+               Vector{Symbol}(), Vector{CompEvaluation}(),
+               Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}())
 
 mutable struct Model <: AbstractDict{Symbol, AbstractComponent}
     comp::OrderedDict{Symbol, AbstractComponent}

@@ -107,18 +107,33 @@ compdata(domain::AbstractDomain, comp::AbstractComponent) =
     error("Component " * string(typeof(comp)) * " must implement its own version of `compdata`.")
 
 # ____________________________________________________________________
-addexpr!(model::Model, expr::Expr         ; kw...) = addexpr!(model, 1, [expr]       ; kw...)
-addexpr!(model::Model, symbol::Symbol     ; kw...) = addexpr!(model, 1, [:(+$symbol)]; kw...)
-addexpr!(model::Model, exprs::Vector{Expr}; kw...) = addexpr!(model, 1, exprs        ; kw...)
-addexpr!(model::Model, id::Int, expr::Expr; kw...) = addexpr!(model, id, [expr]      ; kw...)
-addexpr!(model::Model, id::Int, s::Symbol ; kw...) = addexpr!(model, id, [:(+$s)]    ; kw...)
-function addexpr!(model::Model, id::Int, exprs::Vector{Expr};
-                  labels=Vector{Symbol}(), cmp=Vector{Bool}())
-    instrument = instruments(model, id)
-    (length(labels) == 0)  && (labels = Symbol.(Ref(:expr), length(instrument.exprs)+1:length(instrument.exprs)+length(exprs)))
-    (length(cmp) == 0)  && (cmp = fill(false, length(exprs)))
+newexprlabel(model::Model, id::Int) = Symbol(:expr, length(instruments(model, id).exprs)+1)
+newexprlabel(model::Model, id::Int, n::Int) = Symbol.(Ref(:expr), length(instruments(model, id).exprs) .+ collect(1:n))
+
+addexpr!(model::Model                                 , expr::Expr         ; cmp=true) = addexpr!(model,  1, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
+addexpr!(model::Model                                 , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
+addexpr!(model::Model                                 , exprs::Vector{Expr}; cmp=true) = addexpr!(model,  1,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
+
+addexpr!(model::Model, id::Int                        , expr::Expr         ; cmp=true) = addexpr!(model, id, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
+addexpr!(model::Model, id::Int                        , symbol::Symbol     ; cmp=true) = addexpr!(model, id, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
+addexpr!(model::Model, id::Int                        , exprs::Vector{Expr}; cmp=true) = addexpr!(model, id,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
+
+addexpr!(model::Model,          label::Symbol         , expr::Expr         ; cmp=true) = addexpr!(model,  1, [label]                               , [expr]       ; cmp=[cmp])
+addexpr!(model::Model,          label::Symbol         , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [label]                               , [:(+$symbol)]; cmp=[cmp])
+addexpr!(model::Model,          labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=true) = addexpr!(model,  1,  labels                               , exprs        ; cmp=fill(cmp, length(exprs)))
+
+
+function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=Vector{Bool}())
+    (length(cmp) == 0)  && (cmp = fill(true, length(exprs)))
     @assert length(labels) == length(exprs)
     @assert length(cmp) == length(exprs)
+
+    instrument = instruments(model, id)
+    labels = [instrument.exprnames; labels]
+    exprs = [instrument.exprs; exprs]
+    cmp = [instrument.exprcmp; cmp]
+    deleteat!(instruments(model), id)
+    instrument = Instrument(instrument.label, instrument.domain)
     
     function parse_model_expr(expr::Union{Symbol, Expr}, cnames, accum=Vector{Symbol}())
         if typeof(expr) == Expr
@@ -206,12 +221,13 @@ function addexpr!(model::Model, id::Int, exprs::Vector{Expr};
     instrument.code = join(code, "\n")
     instrument.funct = funct
     instrument.counter = 0
-    instrument.compnames = unique([instrument.compnames; compinvolved])
-    append!(instrument.compevals, compevals)
-    append!(instrument.exprnames, deepcopy(labels))
-    append!(instrument.exprs, deepcopy(exprs))
-    append!(instrument.exprcmp, cmp)
-    append!(instrument.exprevals, exprevals)
+    instrument.compnames = compinvolved
+    instrument.compevals = compevals
+    instrument.exprnames = deepcopy(labels)
+    instrument.exprs = deepcopy(exprs)
+    instrument.exprcmp = cmp
+    instrument.exprevals = exprevals
+    insert!(instruments(model), id, instrument)
     evaluate!(model)
     return model
 end
@@ -254,13 +270,9 @@ mathematical expression.
 """
 
 function addinstrument!(model::Model, domain::AbstractDomain; label="none")
-    funct = ()->nothing
-    push!(instruments(model), Instrument(label, "", funct, 0, deepcopy(domain),
-                                         Vector{Symbol}(), Vector{CompEvaluation}(),
-                                         Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}()))
-    return model
+    push!(instruments(model), Instrument(label, domain))
+    return length(instruments(model))
 end
-
 
 
 # function addinstrument!(model::Model)

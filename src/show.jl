@@ -74,6 +74,7 @@ function printtail(io::IO)
     ps.pendingrule = false
 end
 
+# println(getfield(model2, :instruments)[1].code)
 
 function show(io::IO, dom::AbstractCartesianDomain)
     printsub(io, "Cartesian domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
@@ -258,7 +259,7 @@ function show(io::IO, model::Model)
             inf = length(findall(isinf.(result)))
             printcell(io, lastingroup=(localcount == lastcount),
                       @sprintf("%-2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %7d │ %s",
-                               (!instrument.exprcmp[jj]  ?  "⇒"  :  ""),
+                               (instrument.exprcmp[jj]  ?  "⇒"  :  ""),
                                instrument.exprnames[jj], instrument.counter,
                                minimum(v), maximum(v), mean(v), nan+inf, instrument.exprs[jj]))
             countexpr += 1

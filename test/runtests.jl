@@ -47,7 +47,8 @@ noise = randn(rng, length(x));
 data2 = Measures(1.3 * (y + noise), 1.3)
 
 addcomponent!(model2, :calib=>SimpleParam(1))
-addinstrument!(model2, dom, :(calib * ((comp1 + comp2) * comp3)))
+addinstrument!(model2, dom)
+addexpr!(model2, 2, :(calib * ((comp1 + comp2) * comp3)))
 result2 = fit(model2, [data, data2])
 
 
