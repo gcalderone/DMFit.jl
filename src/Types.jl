@@ -208,7 +208,7 @@ function printcell(io::IO, args...; u=false); print(io, "    "); printstyled(io,
 
 function show(io::IO, dom::AbstractCartesianDomain)
     printtype(io, typeof(dom), "  length: ", length(dom), "")
-    s = @sprintf("%6s │ %8s │ %10s │ %10s │ %10s │ %10s",
+    s = @sprintf("%5s │ %8s │ %10s │ %10s │ %10s │ %10s",
                  "Dim.", "Size", "Min val", "Max val", "Min step", "Max step")
     printhead(io, s)
 
@@ -219,7 +219,7 @@ function show(io::IO, dom::AbstractCartesianDomain)
             b = a .- circshift(a, 1)
             b = b[2:end]
         end
-        s = @sprintf("%6d │ %8d │ %10.4g │ %10.4g │ %10.4g │ %10.4g",
+        s = @sprintf("%5d │ %8d │ %10.4g │ %10.4g │ %10.4g │ %10.4g",
                      i, length(a),
                      minimum(a), maximum(a),
                      minimum(b), maximum(b))
@@ -230,12 +230,12 @@ end
 
 function show(io::IO, dom::AbstractLinearDomain)
     printtype(io, typeof(dom), " length: ", length(dom), "")
-    s = @sprintf("%6s │ %10s │ %10s",
+    s = @sprintf("%5s │ %10s │ %10s",
                  "Dim.", "Min val", "Max val")
     printhead(io, s)
     
     for i in 1:ndims(dom)
-        s = @sprintf("%6d │ %10.4g │ %10.4g",
+        s = @sprintf("%5d │ %10.4g │ %10.4g",
                      i, getaxismin(dom, i), getaxismax(dom, i))
         printcell(io, s)
     end
@@ -245,7 +245,7 @@ end
 # Special case for Domain_1D: treat it as a Cartesian domain, despite it is a Linear one.
 function show(io::IO, dom::Domain_1D)
     printtype(io, typeof(dom), " length: ", length(dom), "")
-    s = @sprintf("%6s │ %8s │ %10s │ %10s │ %10s │ %10s",
+    s = @sprintf("%5s │ %8s │ %10s │ %10s │ %10s │ %10s",
                  "Dim.", "Size", "Min val", "Max val", "Min step", "Max step")
     printhead(io, s)
 
@@ -255,7 +255,7 @@ function show(io::IO, dom::Domain_1D)
         b = a .- circshift(a, 1)
         b = b[2:end]
     end
-    s = @sprintf("%6d │ %8d │ %10.4g │ %10.4g │ %10.4g │ %10.4g",
+    s = @sprintf("%5d │ %8d │ %10.4g │ %10.4g │ %10.4g │ %10.4g",
                  1, length(a),
                  minimum(a), maximum(a),
                  minimum(b), maximum(b))
@@ -489,7 +489,7 @@ end
 
 function show(io::IO, comp::BestFitComp; count=0, cname="")
     if count == 0
-        printhead(io, @sprintf "%5s │ %20s │ %10s │ %10s │ %10s │ %10s"  "#" "Component" "Param." "Value" "Uncert." "Rel. unc. (%)")
+        printhead(io, @sprintf "%5s │ %20s │ %10s │ %10s │ %10s │ %10s"  "#" "Component" "Param." "Value" "Uncert." "Rel.unc.(%)")
     end
     localcount = 0;  lastcount = length(getfield(comp, :params))
     for (pname, params) in getfield(comp, :params)
