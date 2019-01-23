@@ -9,7 +9,7 @@ export test_component,
     Domain, CartesianDomain, getaxismin, getaxismax, getaxisextrema,
     Measures, FuncWrap, SimpleParam, Smooth, flatten,
     Model, addcomponent!, addinstrument!, addexpr!, recompile!,
-    evaluate!, fit
+    instrdelete!, instrcount, evaluate!, fit
 
 # ====================================================================
 import Base.show
@@ -61,7 +61,7 @@ function getindex(w::Wrap{Model}, id::Int=1)
 end
 
 instrcount(w::Wrap{Model}) = length(wrappee(w).instruments)
-instrdelete!(w::Wrap{Model}, id::Int) = deleteat!(wrappee(w), id)
+instrdelete!(w::Wrap{Model}, id::Int) = instrdelete!(wrappee(w), id)
 instrdelete!(model::Model, id::Int) = deleteat!(model.instruments, id)
 
 propertynames(w::Wrap{Instrument}) = [wrappee(w).exprnames; wrappee(w).compnames]
