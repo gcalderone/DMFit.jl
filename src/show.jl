@@ -320,6 +320,20 @@ function show(io::IO, instr::Instrument)
 end
 
 
+function show(io::IO, par::Parameter)
+    if par.fixed
+        println(io, "Value : ", par.val, "   (FIXED)")
+    else
+        println(io, "Value : ", par.val, "  [", par.low , " : ", par.high, "]")
+        if par.expr != ""
+            println(io, "Expr : ", par.expr)
+        end
+    end
+end
+
+show(io::IO, par::FitParam) = println(io, par.val, " ± ", par.unc)
+
+
 show(io::IO, w::Wrap{FitComp}) = show(io, wrappee(w))
 function show(io::IO, comp::FitComp; header=true, cname="")
     if header
