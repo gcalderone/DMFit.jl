@@ -59,8 +59,8 @@ resetcounters!(model)
 
 dump(result)
 
-println(result.bestfit.comp1.p[1].val)
-println(result.bestfit.comp1.p[1].unc)
+println(result.comp1.p[1].val)
+println(result.comp1.p[1].unc)
 
 
 test_component(dom, FuncWrap(f, params...), 1000)

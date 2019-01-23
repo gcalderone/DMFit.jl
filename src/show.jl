@@ -246,16 +246,17 @@ function show(io::IO, model::Model)
         return nothing
     end
 
+    printmain(io, "Instrument(s) defined: ", length(model.instruments))
     countcmp = 0
     for ii in 1:length(model.instruments)
         instr  = model.instruments[ii]
-        show(io, instr)
         countcmp += length(findall(instr.exprcmp))
     end
     printmain(io, "Dataset(s) required to fit this model: ", countcmp)
 end
 
 show(io::IO, w::Wrap{Instrument}) = show(io, wrappee(w))
+
 
 function show(io::IO, instr::Instrument)
     function left(s::AbstractString, maxlen::Int)
