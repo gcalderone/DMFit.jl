@@ -9,7 +9,7 @@ mutable struct PrintSettings
     colormain::Symbol
     colortable::Symbol
 end
-const ps = PrintSettings("", "", "", "", 0, false, false, :magenta, :light_blue)
+const ps = PrintSettings("", "", "", "", 0, false, false, :yellow, :light_blue)
 
 function showcompact(b::Bool=true)
     global ps
@@ -239,25 +239,24 @@ function show(io::IO, model::Model)
         count = show(io, comp, cname=string(cname), count=count, header=false)
     end
     printtail(io)
-    println(io)
 
     if length(model.instruments) == 0
-        printmain(io, "Total instruments: 0")
+        printmain(io, "Instrument(s) defined: 0")
         return nothing
     end
 
-    printmain(io, "Instrument(s) defined: ", length(model.instruments))
+    printmain(io, )
     countcmp = 0
     for ii in 1:length(model.instruments)
         instr  = model.instruments[ii]
         countcmp += length(findall(instr.exprcmp))
     end
-    printmain(io, "Dataset(s) required to fit this model: ", countcmp)
+    printmain(io, "Instrument(s) defined: ", length(model.instruments),
+              ".  Dataset(s) required for fitting: ", countcmp, newline=false)
 end
 
+
 show(io::IO, w::Wrap{Instrument}) = show(io, wrappee(w))
-
-
 function show(io::IO, instr::Instrument)
     function left(s::AbstractString, maxlen::Int)
         if maxlen < length(s)

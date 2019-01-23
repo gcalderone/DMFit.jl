@@ -69,11 +69,11 @@ function getproperty(w::Wrap{Instrument}, s::Symbol)
     instr = wrappee(w)
     i = findall(s .== instr.compnames)
     if length(i) == 1
-        return instr.compevals[i].result
+        return instr.compevals[i[1]].result
     end
     i = findall(s .== instr.exprnames)
     if length(i) == 1
-        return instr.exprevals[i]
+        return instr.exprevals[i[1]]
     end
     return nothing
 end
