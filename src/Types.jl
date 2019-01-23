@@ -18,13 +18,6 @@ abstract type AbstractMinimizer end
 # ====================================================================
 # Define domain, data and associated methods for ndim=1, 2 and 3
 #
-
-# The following is used in `code_ndim` macro, hence it must be declared here
-mutable struct FuncWrap_cdata <: AbstractComponentData
-    func::Function
-end
-
-
 macro code_ndim(ndim::Int)
     @assert ndim >= 1 "Number of dimensions must be >= 1"
     out = Expr(:block)
@@ -157,16 +150,13 @@ macro code_ndim(ndim::Int)
     ))
 
     s = Vector{String}()
-    push!(s, "function evaluate!(output::Vector{Float64}, domain::Domain_$(ndim)D, compdata::FuncWrap_cdata, params...)")
-    push!(s, "  output .= compdata.func(" * join("domain[" .* string.(collect(1:ndim)) .* "]", ", ") * ", params...)")
+    push!(s, "function evaluate!(cdata::FuncWrap_cdata, output::Vector{Float64}, domain::Domain_$(ndim)D, params...)")
+    push!(s, "  output .= cdata.func(" * join("domain[" .* string.(collect(1:ndim)) .* "]", ", ") * ", params...)")
     push!(s, "end")
     push!(out.args, Meta.parse(join(s, "\n")))
 
     return esc(out)
 end
-
-@code_ndim 1
-@code_ndim 2
 
 # The following methods do not require a macro to be implemented
 getaxismin(dom::AbstractLinearDomain, dim::Int) = dom.vmin[dim]
@@ -255,7 +245,7 @@ Instrument(label::String, dom::AbstractDomain) =
                Vector{Symbol}(), Vector{CompEvaluation}(),
                Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}())
 
-mutable struct Model <: AbstractDict{Symbol, AbstractComponent}
+mutable struct Model
     comp::OrderedDict{Symbol, AbstractComponent}
     instruments::Vector{Instrument}
     Model() = new(OrderedDict{Symbol, AbstractComponent}(), Vector{Instrument}())
@@ -286,18 +276,18 @@ struct FitResult
 end
 
 
+
 # ____________________________________________________________________
 # Built-in component: SimpleParam
-mutable struct SimpleParam_cdata <: AbstractComponentData; end
-
-mutable struct SimpleParam <: AbstractComponent
+struct SimpleParam <: AbstractComponent
     val::Parameter
     SimpleParam(val::Number) = new(Parameter(val))
 end
 
-compdata(domain::AbstractDomain, comp::SimpleParam) = SimpleParam_cdata()
-function evaluate!(output::AbstractArray{Float64}, domain::AbstractDomain,
-                   compdata::SimpleParam_cdata, val)
+struct SimpleParam_cdata <: AbstractComponentData; end
+cdata(comp::SimpleParam, domain::AbstractDomain) = SimpleParam_cdata()
+
+function evaluate!(cdata::SimpleParam_cdata, output::AbstractArray{Float64}, domain::AbstractDomain, val)
     output .= val
     return output
 end
@@ -305,17 +295,46 @@ end
 
 # ____________________________________________________________________
 # Built-in component: FuncWrap
-mutable struct FuncWrap <: AbstractComponent
+struct FuncWrap <: AbstractComponent
     func::Function
     p::Vector{Parameter}
-end
 
-function FuncWrap(func::Function, args...)
-    params= Vector{Parameter}()
-    for i in 1:length(args)
-        push!(params, Parameter(args[i]))
+    function FuncWrap(func::Function, args...)
+        params = Vector{Parameter}()
+        for i in 1:length(args)
+            push!(params, Parameter(args[i]))
+        end
+        return new(func, params)
     end
-    return FuncWrap(func, params)
 end
 
-compdata(domain::DataFitting.AbstractDomain, comp::FuncWrap) = FuncWrap_cdata(comp.func)
+struct FuncWrap_cdata <: AbstractComponentData
+    func::Function
+end
+cdata(comp::FuncWrap, domain::AbstractDomain) = FuncWrap_cdata(comp.func)
+
+
+# ____________________________________________________________________
+# Built-in component: Smooth
+struct Smooth <: AbstractComponent
+    n::Int
+    Smooth(n::Number) = new(Int(n))
+end
+
+struct Smooth_cdata <: AbstractComponentData
+    n::Int
+    i::AbstractArray
+end
+cdata(comp::Smooth, domain::AbstractDomain) = Smooth_cdata(comp.n, 1:comp.n:(length(domain)-comp.n))
+outsize(cdata::Smooth_cdata, domain::AbstractDomain) = length(cdata.i)
+isfunction(comp::Smooth) = true
+
+function evaluate!(cdata::Smooth_cdata, output::AbstractArray{Float64}, domain::AbstractDomain, v)
+     output .= [mean(v[i:i+cdata.n-1]) for i in cdata.i]
+    return output
+end
+
+# ____________________________________________________________________
+@code_ndim 1
+@code_ndim 2
+

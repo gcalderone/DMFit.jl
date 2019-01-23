@@ -30,15 +30,20 @@ model.comp1.p[2].val = 1.e-3
 result = fit(model, data)
 
 
+addcomponent!(model, :ss => DataFitting.Smooth(2))
+addexpr!(model, 1, :(ss(comp1)))
+
+
+
 f1(x, p1, p2, p3) = @.  p1  +  p2 * x  +  p3 * x^2
 f2(x, p4, p5) = @. p4 * sin(p5 * x)
 f3(x) = cos.(x)
 
 model = Model(:comp1 => FuncWrap(f1, params[1], params[2], params[3]),
-               :comp2 => FuncWrap(f2, params[4], params[5]),
-               :comp3 => FuncWrap(f3))
+              :comp2 => FuncWrap(f2, params[4], params[5]),
+              :comp3 => FuncWrap(f3))
 addinstrument!(model, dom)
-addexpr!(model, :((comp1 + comp2) * comp3))
+addexpr!(model, :((comp1 .+ comp2) .* comp3))
 result = fit(model, data)
 
 
@@ -48,16 +53,10 @@ data2 = Measures(1.3 * (y + noise), 1.3)
 
 addcomponent!(model, :calib=>SimpleParam(1))
 addinstrument!(model, dom)
-addexpr!(model, 2, :(calib * ((comp1 + comp2) * comp3)))
+addexpr!(model, 2, :(calib .* ((comp1 .+ comp2) .* comp3)))
 result = fit(model, [data, data2])
 
 
-
-
-resetcounters!(model)
-
-
-dump(result)
 
 println(result.comp1.p[1].val)
 println(result.comp1.p[1].unc)
@@ -125,12 +124,12 @@ model.comp1.p[1].high = +Inf
 
 model.comp1.p[2].expr = "2 * comp1_p1"
 model.comp1.p[2].fixed = true
-addinstrument!(model)
+recompile!(model)
 result = fit(model, data)
 
 model.comp1.p[2].expr = "comp1_p1 + comp1_p2"
 model.comp1.p[2].fixed = false
-addinstrument!(model)
+recompile!(model)
 result = fit(model, data)
 
 

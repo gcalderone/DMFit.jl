@@ -7,8 +7,8 @@ using DataStructures
 # ====================================================================
 export test_component,
     Domain, CartesianDomain, getaxismin, getaxismax, getaxisextrema,
-    Measures, FuncWrap, SimpleParam, flatten,
-    Model, addcomponent!, addinstrument!, addexpr!, domain, evalcounter, resetcounters!,
+    Measures, FuncWrap, SimpleParam, Smooth, flatten,
+    Model, addcomponent!, addinstrument!, addexpr!, recompile!,
     evaluate!, fit
 
 # ====================================================================
@@ -94,10 +94,10 @@ function getproperty(w::Wrap{FitResult}, s::Symbol)
     end
     return Wrap{FitComp}(res.bestfit[s])
 end
- 
+
 propertynames(w::Wrap{FitComp}) = collect(keys(wrappee(w).params))
 getproperty(w::Wrap{FitComp}, s::Symbol) = wrappee(w).params[s]
-    
+
 
 # ____________________________________________________________________
 """
@@ -136,8 +136,11 @@ end
 getparamvalues(v::Union{Model, AbstractComponent}) = [wpar.par.val for (pname, wpar) in getparams(v)]
 
 # ____________________________________________________________________
-compdata(domain::AbstractDomain, comp::AbstractComponent) =
-    error("Component " * string(typeof(comp)) * " must implement its own version of `compdata`.")
+cdata(comp::AbstractComponent, domain::AbstractDomain) =
+    error("Component " * string(typeof(comp)) * " must implement its own version of `cdata`.")
+
+outsize(cdata::AbstractComponentData, domain::AbstractDomain) = length(domain)
+isfunction(comp::AbstractComponent) = false
 
 # ____________________________________________________________________
 newexprlabel(model::Model, id::Int) = Symbol(:expr, length(model.instruments[id].exprs)+1)
@@ -157,6 +160,18 @@ addexpr!(model::Model,          label::Symbol         , expr::Expr         ; cmp
 addexpr!(model::Model,          label::Symbol         , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [label]                               , [:(+$symbol)]; cmp=[cmp])
 addexpr!(model::Model,          labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=true) = addexpr!(model,  1,  labels                               , exprs        ; cmp=fill(cmp, length(exprs)))
 
+
+function recompile!(w::Wrap{Model})
+    model = wrappee(w)
+    bkp = deepcopy(model.instruments)
+    empty!(model.instruments)
+    for ii in 1:length(bkp)
+        addinstrument!(w, bkp[ii].domain, label=bkp[ii].label)
+        addexpr!(model, ii, bkp[ii].exprnames, bkp[ii].exprs, cmp=bkp[ii].exprcmp)
+    end
+end
+
+
 function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=Vector{Bool}())
     (length(cmp) == 0)  && (cmp = fill(true, length(exprs)))
     @assert length(labels) == length(exprs)
@@ -168,7 +183,7 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
     cmp = [instr.exprcmp; cmp]
     instrdelete!(model, id)
     instr = Instrument(instr.label, instr.domain)
-    
+
     function parse_model_expr(expr::Union{Symbol, Expr}, cnames, accum=Vector{Symbol}())
         if typeof(expr) == Expr
             # Parse the expression to check which components are involved
@@ -177,11 +192,7 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
 
                 if typeof(arg) == Symbol
                     if arg in cnames # if it is one of the model components...
-                        if i == 1  &&  expr.head == :call # ... and it is a function call...
-                            error("Composite components are not yet supported")
-                        else
-                            push!(accum, arg)
-                        end
+                        push!(accum, arg)
                     end
                 elseif typeof(arg) == Expr
                     parse_model_expr(arg, cnames, accum)
@@ -204,7 +215,7 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
     # Sort involved components according to insertion order
     kk = keys(model.comp)
     sort!(compinvolved, lt=(a, b) -> findall(a .== kk)[1] < findall(b .== kk)[1])
-    
+
     # Prepare the code for model evaluation
     code = Vector{String}()
     tmp = ""
@@ -227,14 +238,18 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
                                              replace(par.expr, "this$(compsep)" => "$(cname)$(compsep)")))
                 tmp *= ", $(cname)$(compsep)$(pname)"
             end
-            push!(code, "  $cname = _evaluate!(_instr.compevals[$i], _instr.domain $tmp)")
+            if isfunction(comp)
+                push!(code, "  $cname(args...) = _evaluate!(_instr.compevals[$i], _instr.domain $tmp, args...)")
+            else
+                push!(code, "  $cname = _evaluate!(_instr.compevals[$i], _instr.domain $tmp)")
+            end
         end
     end
 
     exprevals = Vector{Vector{Float64}}()
     for i in 1:length(exprs)
-        push!(code, "  @. _instr.exprevals[$i] = (" * string(exprs[i]) * ")")
-        push!(exprevals, Vector{Float64}(undef, length(instr.domain)))
+        push!(code, "  _instr.exprevals[$i] = (" * string(exprs[i]) * ")")
+        push!(exprevals, Vector{Float64}(undef, 0))
     end
     push!(code, "  _instr.counter += 1")
     push!(code, "  return nothing")
@@ -244,9 +259,10 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
     compevals = Vector{CompEvaluation}()
     for (cname, comp) in model.comp
         if cname in compinvolved
-            tmp = CompEvaluation(0, compdata(instr.domain, comp),
+            cd = cdata(comp, instr.domain)
+            tmp = CompEvaluation(0, cd,
                                  Vector{Float64}(undef, paramcount(comp)),
-                                 Vector{Float64}(undef, length(instr.domain)))
+                                 Vector{Float64}(undef, outsize(cd, instr.domain)))
             tmp.lastParams .= NaN
             push!(compevals, tmp)
         end
@@ -265,18 +281,18 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
     evaluate!(model)
     return model
 end
-    
+
 # ____________________________________________________________________
 function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
     if c.counter == 0
         c.counter += 1
-        evaluate!(c.result, d, c.cdata, args...)
+        evaluate!(c.cdata, c.result, d, args...)
     else
         for i in 1:length(args)
             if c.lastParams[i] != args[i]
                 c.lastParams .= args
                 c.counter += 1
-                evaluate!(c.result, d, c.cdata, args...)
+                evaluate!(c.cdata, c.result, d, args...)
             end
         end
     end
@@ -365,6 +381,9 @@ test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1)
     test_component(flatten(domain), comp, iter)
 
 
+code(w::Wrap{Instrument}) = println(wrappee(w).code)
+
+
 # ####################################################################
 # Minimizer
 #
@@ -427,7 +446,7 @@ function fit(w::Wrap{Model}, data::Vector{T}; minimizer=Minimizer()) where T<:Ab
     pvalues[ifree] .= bestfit_val
     uncert = fill(NaN, length(pvalues))
     uncert[ifree] .= bestfit_unc
-    
+
     bestfit = OrderedDict{Symbol, FitComp}()
     ii = 0
     for (cname, comp) in model.comp
