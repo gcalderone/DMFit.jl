@@ -7,7 +7,7 @@ mutable struct PrintSettings
     pendingrule::Bool
     compact::Bool
     colormain::Symbol
-    colortable::Symbol    
+    colortable::Symbol
 end
 const ps = PrintSettings("", "", "", "", 0, false, false, :magenta, :light_blue)
 
@@ -58,7 +58,7 @@ function printhead(io::IO, args...)
     ps.tail = join(ss, "┴")
     ps.width = length(tmp)+1
     ps.pendingrule = false
-    
+
     tmp = join(fill("─", ps.width))
     printstyled(io, color=printcolortable(), ps.prefix, "╭", ps.head, "╮\n", ps.prefix, "│")
     printstyled(io, bold=printbold(), color=printcolortable(), args...)
@@ -67,7 +67,7 @@ function printhead(io::IO, args...)
 end
 function printcell(io::IO, args...; lastingroup=false, tail=false)
     global ps
-    (ps.compact)  &&  (return println(io, args...))    
+    (ps.compact)  &&  (return println(io, args...))
     if ps.pendingrule
         tmp = join(fill("─", ps.width))
         printstyled(io, color=printcolortable(), ps.prefix, "├")
@@ -94,8 +94,6 @@ function printtail(io::IO)
     printstyled(io, color=printcolortable(), ps.prefix, "╰", ps.tail, "╯\n")
     ps.pendingrule = false
 end
-
-# println(getfield(model2, :instruments)[1].code)
 
 function show(io::IO, dom::AbstractCartesianDomain)
     printsub(io, "Cartesian domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
@@ -180,7 +178,7 @@ function show(io::IO, data::AbstractData)
         printcell(io, s)
     end
     printtail(io)
-    
+
     if length(nonFinite) > 0
         println(io)
         for s in nonFinite
@@ -216,20 +214,14 @@ end
 
 
 show(io::IO, mime::MIME"text/plain", model::Model) = show(io, model)
+show(io::IO, w::Wrap{Model}) = show(io, wrappee(w))
 function show(io::IO, model::Model)
-    function left(s::AbstractString, maxlen::Int)
-        if maxlen < length(s)
-            return s[1:maxlen-1] * "…"
-        end
-        return s
-    end
-    
     printmain(io, "Model components:")
-    compcount(model) != 0  || (return nothing)
+    length(model.comp) != 0  || (return nothing)
 
     printhead(io, @sprintf "%-15s │ %-30s"  "Component" "Type")
     count = 0
-    for (cname, comp) in components(model)
+    for (cname, comp) in model.comp
         count += 1
         ctype = split(string(typeof(comp)), ".")
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
@@ -243,25 +235,41 @@ function show(io::IO, model::Model)
 
     printsub(io, "Parameters:")
     count = 0
-    for (cname, comp) in components(model)
+    for (cname, comp) in model.comp
         count = show(io, comp, cname=string(cname), count=count, header=false)
     end
     printtail(io)
     println(io)
 
-    if length(instruments(model)) == 0
-        printmain(io, "Total expressions: 0")
+    if length(model.instruments) == 0
+        printmain(io, "Total instruments: 0")
         return nothing
+    end
+
+    countcmp = 0
+    for ii in 1:length(model.instruments)
+        instr  = model.instruments[ii]
+        show(io, instr)
+        countcmp += length(findall(instr.exprcmp))
+    end
+    printmain(io, "Dataset(s) required to fit this model: ", countcmp)
+end
+
+show(io::IO, w::Wrap{Instrument}) = show(io, wrappee(w))
+
+function show(io::IO, instr::Instrument)
+    function left(s::AbstractString, maxlen::Int)
+        if maxlen < length(s)
+            return s[1:maxlen-1] * "…"
+        end
+        return s
     end
 
     # Check max length of expressions
     exprmaxlength = 0
-    for ii in 1:length(instruments(model))
-        instrument = instruments(model, ii)
-        for jj in 1:length(instrument.exprs)
-            l = length(string(instrument.exprs[jj]))
-            (exprmaxlength < l)  &&  (exprmaxlength = l)
-        end
+    for e in instr.exprs
+        l = length(string(e))
+        (exprmaxlength < l)  &&  (exprmaxlength = l)
     end
     #Check available space to fill the terminal
     availlength = exprmaxlength
@@ -270,63 +278,57 @@ function show(io::IO, model::Model)
     end
     (availlength > exprmaxlength)  &&  (availlength = exprmaxlength)
     (availlength < 4)  &&  (availlength = 4) # Leave space for "Expr" header
-    
-    countcmp = 0
-    for ii in 1:length(instruments(model))
-        instrument = instruments(model, ii)
-        printmain(io, "Instrument $ii (", instrument.label, ") on ", newline=false)
-        show(io, instrument.domain)
-        println(io)
 
-        printsub(io, "Evaluated expression(s):")
-        printhead(io, @sprintf "%2s%-15s │ %7s │ %10s │ %10s │ %10s │ %1s │ %s " "" "Label" "Counter" "Min" "Max" "Mean" "⚠" "Expr"*join(fill(" ", availlength-4)))
+    printmain(io, "Instrument (", instr.label, ") on ", newline=false)
+    show(io, instr.domain)
+    println(io)
 
-        for jj in 1:length(instrument.compevals)
-            cname = instrument.compnames[jj]
-            ceval = instrument.compevals[jj]
-                
-            result = ceval.result
-            v = view(result, findall(isfinite.(result)))
-            nan = length(findall(isnan.(result)))
-            inf = length(findall(isinf.(result)))
-            printcell(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ ",
-                                   "", cname, ceval.counter,
-                                   minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : "")),
-                                   lastingroup=(jj==length(instrument.compevals)))
-        end
+    printsub(io, "Evaluated expression(s):")
+    printhead(io, @sprintf "%2s%-15s │ %7s │ %10s │ %10s │ %10s │ %1s │ %s " "" "Label" "Counter" "Min" "Max" "Mean" "⚠" "Expr"*join(fill(" ", availlength-4)))
 
-        localcount = 0; lastcount = length(instrument.exprs)
-        for jj in 1:length(instrument.exprs)
-            localcount += 1
-            result = instrument.exprevals[jj]
-            v = view(result, findall(isfinite.(result)))
-            nan = length(findall(isnan.(result)))
-            inf = length(findall(isinf.(result)))
-            printcell(io, lastingroup=(localcount == lastcount),
-                      @sprintf("%-2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ %s",
-                               (instrument.exprcmp[jj]  ?  "⇒"  :  ""),
-                               instrument.exprnames[jj], instrument.counter,
-                               minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : ""),
-                               left(string(instrument.exprs[jj]), availlength)))
-            (instrument.exprcmp[jj])  &&  (countcmp += 1)
-        end
-        printtail(io)
-        println(io)
+    for jj in 1:length(instr.compevals)
+        cname = instr.compnames[jj]
+        ceval = instr.compevals[jj]
+
+        result = ceval.result
+        v = view(result, findall(isfinite.(result)))
+        nan = length(findall(isnan.(result)))
+        inf = length(findall(isinf.(result)))
+        printcell(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ ",
+                               "", cname, ceval.counter,
+                               minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : "")),
+                  lastingroup=(jj==length(instr.compevals)))
     end
-    printmain(io, "Dataset(s) required to fit this model: ", countcmp)
+
+    localcount = 0; lastcount = length(instr.exprs)
+    for jj in 1:length(instr.exprs)
+        localcount += 1
+        result = instr.exprevals[jj]
+        v = view(result, findall(isfinite.(result)))
+        nan = length(findall(isnan.(result)))
+        inf = length(findall(isinf.(result)))
+        printcell(io, lastingroup=(localcount == lastcount),
+                  @sprintf("%-2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ %s",
+                           (instr.exprcmp[jj]  ?  "⇒"  :  ""),
+                           instr.exprnames[jj], instr.counter,
+                           minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : ""),
+                           left(string(instr.exprs[jj]), availlength)))
+    end
+    printtail(io)
+    println(io)
 end
 
 
-function show(io::IO, comp::BestFitComp; count=0, cname="")
-    if count == 0
+show(io::IO, w::Wrap{FitComp}) = show(io, wrappee(w))
+function show(io::IO, comp::FitComp; header=true, cname="")
+    if header
         printhead(io, @sprintf "%-15s │ %-10s │ %10s │ %10s │ %10s"  "Component" "Param." "Value" "Uncert." "Rel.unc.(%)")
     end
-    localcount = 0;  lastcount = length(getfield(comp, :params))
-    for (pname, params) in getfield(comp, :params)
+    localcount = 0;  lastcount = length(comp.params)
+    for (pname, params) in comp.params
         localcount += 1
-        if typeof(params) == Vector{BestFitParam}
+        if typeof(params) == Vector{FitParam}
             for ii in 1:length(params)
-                count += 1
                 par = params[ii]
                 spname = string(pname) * "[" * string(ii) * "]"
                 printcell(io, lastingroup=((localcount == lastcount)  &&  (ii == length(params))),
@@ -334,7 +336,6 @@ function show(io::IO, comp::BestFitComp; count=0, cname="")
                                           spname, par.val, par.unc, par.unc/par.val*100.))
             end
         else
-            count += 1
             par = params
             spname = string(pname)
             s = @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
@@ -342,34 +343,35 @@ function show(io::IO, comp::BestFitComp; count=0, cname="")
             printcell(io, s, lastingroup=(localcount == lastcount))
         end
     end
-    return count
 end
 
 
-function show(io::IO, f::FitResult)
-    printmain(io, "Best Fit results:")    
+function show(io::IO, w::Wrap{FitResult})
+    res = wrappee(w)
+    printmain(io, "Best Fit results:")
 
-    count = 0
-    for (cname, comp) in getfield(f.bestfit, :comp)
-        count = show(io, comp, count=count, cname=string(cname))
+    first = true
+    for (cname, comp) in res.bestfit
+        show(io, comp, header=first, cname=string(cname))
+        first = false
     end
     printtail(io)
 
     println(io)
-    println(io, @sprintf("    #Data  : %10d              Cost: %10.5g", f.ndata, f.cost))
-    println(io, @sprintf("    #Param : %10d              DOF : %10d", f.ndata-f.dof, f.dof))
-    println(io, @sprintf("    Elapsed: %10.4g s            Red.: %10.4g", f.elapsed, f.cost / f.dof))
+    println(io, @sprintf("    #Data  : %10d              Cost: %10.5g", res.ndata, res.cost))
+    println(io, @sprintf("    #Param : %10d              DOF : %10d", res.ndata-res.dof, res.dof))
+    println(io, @sprintf("    Elapsed: %10.4g s            Red.: %10.4g", res.elapsed, res.cost / res.dof))
     printstyled(io, "    Status :  ", bold=printbold())
-    if f.status == :Optimal
+    if res.status == :Optimal
         printstyled(color=:green, io, "Optimal", bold=printbold())
-    elseif f.status == :NonOptimal
+    elseif res.status == :NonOptimal
         printstyled(color=:yellow, io, "non-Optimal, see fitter output", bold=printbold())
-    elseif f.status == :Warn
+    elseif res.status == :Warn
         printstyled(color=:yellow, io, "Warning, see fitter output", bold=printbold())
-    elseif f.status == :Error
+    elseif res.status == :Error
         printstyled(color=:red, io, "Error, see fitter output", bold=printbold())
     else
-        printstyled(color=:magenta, io, "Unknown (" * string(f.status) * "), see fitter output", bold=printbold())
+        printstyled(color=:magenta, io, "Unknown (" * string(res.status) * "), see fitter output", bold=printbold())
     end
     println(io)
 end

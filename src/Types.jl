@@ -195,6 +195,11 @@ function reshape(array::AbstractArray, dom::AbstractCartesianDomain)
     return out
 end
 
+struct Wrap{T}
+    _w::T
+end
+wrappee(v::Wrap{T}) where T = getfield(v, :_w)
+
 
 # ====================================================================
 # Parameter and WrapParameter structure
@@ -244,7 +249,8 @@ mutable struct Instrument
     exprcmp::Vector{Bool}
     exprevals::Vector{Vector{Float64}}
 end
-Instrument(label::String, dom::AbstractDomain) = 
+
+Instrument(label::String, dom::AbstractDomain) =
     Instrument(label, deepcopy(dom), "", ()->nothing, 0,
                Vector{Symbol}(), Vector{CompEvaluation}(),
                Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}())
@@ -252,30 +258,26 @@ Instrument(label::String, dom::AbstractDomain) =
 mutable struct Model <: AbstractDict{Symbol, AbstractComponent}
     comp::OrderedDict{Symbol, AbstractComponent}
     instruments::Vector{Instrument}
-    Model() = new(OrderedDict{Symbol, AbstractComponent}(),
-                  Vector{Instrument}())
+    Model() = new(OrderedDict{Symbol, AbstractComponent}(), Vector{Instrument}())
 end
 
 
 # ====================================================================
 # Fit results
 #
-struct BestFitParam
+struct FitParam
     val::Float64
     unc::Float64
 end
 
-struct BestFitComp
-    params::OrderedDict{Symbol, Union{BestFitParam, Vector{BestFitParam}}}
+struct FitComp
+    params::OrderedDict{Symbol, Union{FitParam, Vector{FitParam}}}
 end
 
-struct BestFit
-    comp::OrderedDict{Symbol, BestFitComp}
-end
 
 struct FitResult
     fitter::AbstractMinimizer
-    bestfit::BestFit
+    bestfit::OrderedDict{Symbol, FitComp}
     ndata::Int
     dof::Int
     cost::Float64

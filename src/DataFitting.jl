@@ -9,7 +9,7 @@ export test_component,
     Domain, CartesianDomain, getaxismin, getaxismax, getaxisextrema,
     Measures, FuncWrap, SimpleParam, flatten,
     Model, addcomponent!, addinstrument!, addexpr!, domain, evalcounter, resetcounters!,
-    addinstrument!, evaluate!, fit
+    evaluate!, fit
 
 # ====================================================================
 import Base.show
@@ -24,7 +24,6 @@ include("Types.jl")
 include("show.jl")
 
 const compsep = "_"
-const showprefix = "    "
 
 # ####################################################################
 # Functions
@@ -36,57 +35,69 @@ const showprefix = "    "
 
 Constructor for the `Model` structure.
 """
-Model(args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N} = addcomponent!(Model(), args...)
+Model(args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N} =
+    addcomponent!(Wrap{Model}(Model()), args...)
+
+function addcomponent!(model::Wrap{Model}, args...)
+    addcomponent!(wrappee(model), args...)
+    return model
+end
 function addcomponent!(model::Model, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
     for c in args
-        getfield(model, :comp)[c[1]] = c[2]
+        model.comp[c[1]] = c[2]
     end
     return model
 end
 
-compcount(model::Model) = length(getfield(model, :comp))
-components(model::Model) = getfield(model, :comp)
-instruments(model::Model) = getfield(model, :instruments)
+propertynames(w::Wrap{Model}) = collect(keys(wrappee(w).comp))
+getproperty(w::Wrap{Model}, s::Symbol) = get(wrappee(w).comp, s, nothing)
 
-function instruments(model::Model, id::Int)
-    c = instruments(model)
-    @assert length(c) >= 1 "No model has been compiled"
+function getindex(w::Wrap{Model}, id::Int=1)
+    model = wrappee(w)
+    c = model.instruments
+    @assert length(c) >= 1 "No instrument in model"
     @assert 1 <= id <= length(c) "Invalid index (allowed range: 1 : " * string(length(c)) * ")"
-    return c[id]
+    return Wrap{Instrument}(c[id])
 end
 
-propertynames(model::Model) = collect(keys(getfield(model, :comp)))
-getproperty(model::Model, s::Symbol) = get(getfield(model, :comp), s, nothing)
+instrcount(w::Wrap{Model}) = length(wrappee(w).instruments)
+instrdelete!(w::Wrap{Model}, id::Int) = deleteat!(wrappee(w), id)
+instrdelete!(model::Model, id::Int) = deleteat!(model.instruments, id)
 
-propertynames(res::BestFit) = collect(keys(getfield(res, :comp)))
-getproperty(res::BestFit, s::Symbol) = get(getfield(res, :comp), s, nothing)
-
-propertynames(res::BestFitComp) = collect(keys(getfield(res, :params)))
-getproperty(res::BestFitComp, s::Symbol) = get(getfield(res, :params), s, nothing)
-
-
-
-struct InstrumentExpr
-    keys::Vector{Symbol}
-    val::Vector{Vector{Float64}}
-end
-
-function getindex(model::Model, id::Int=1)
-    instr = instruments(model, id)
-    ie = OrderedDict{Symbol, Vector{Float64}}()
-    for ii in 1:length(instr.compnames)
-        ie[instr.compnames[ii]] = instr.compevals[ii].result
+propertynames(w::Wrap{Instrument}) = [wrappee(w).exprnames; wrappee(w).compnames]
+function getproperty(w::Wrap{Instrument}, s::Symbol)
+    instr = wrappee(w)
+    i = findall(s .== instr.compnames)
+    if length(i) == 1
+        return instr.compevals[i].result
     end
-    for ii in 1:length(instr.exprnames)
-        ie[instr.exprnames[ii]] = instr.exprevals[ii]
+    i = findall(s .== instr.exprnames)
+    if length(i) == 1
+        return instr.exprevals[i]
     end
-    return InstrumentExpr(collect(keys(ie)), collect(values(ie)))
+    return nothing
 end
 
-propertynames(res::InstrumentExpr) = collect(getfield(res, :keys))
-getproperty(res::InstrumentExpr, s::Symbol) = getfield(res, :val)[findall(getfield(res, :keys) .== s)[1]]
 
-
+function propertynames(w::Wrap{FitResult})
+    res = wrappee(w)
+    out = collect(fieldnames(typeof(res)))
+    out = out[findall((out .!= :bestfit)  .&
+                      (out .!= :fitter))]
+    out = [out; collect(keys(res.bestfit))]
+    return out
+end
+function getproperty(w::Wrap{FitResult}, s::Symbol)
+    res = wrappee(w)
+    if s in fieldnames(typeof(res))
+        return getfield(res, s)
+    end
+    return Wrap{FitComp}(res.bestfit[s])
+end
+ 
+propertynames(w::Wrap{FitComp}) = collect(keys(wrappee(w).params))
+getproperty(w::Wrap{FitComp}, s::Symbol) = wrappee(w).params[s]
+    
 
 # ____________________________________________________________________
 """
@@ -114,7 +125,7 @@ end
 
 function getparams(model::Model)
     out = OrderedDict{Symbol, WrapParameter}()
-    for (cname, comp) in components(model)
+    for (cname, comp) in model.comp
         for (pname, par) in getparams(comp)
             out[Symbol(cname, compsep, pname)] = par
         end
@@ -129,8 +140,10 @@ compdata(domain::AbstractDomain, comp::AbstractComponent) =
     error("Component " * string(typeof(comp)) * " must implement its own version of `compdata`.")
 
 # ____________________________________________________________________
-newexprlabel(model::Model, id::Int) = Symbol(:expr, length(instruments(model, id).exprs)+1)
-newexprlabel(model::Model, id::Int, n::Int) = Symbol.(Ref(:expr), length(instruments(model, id).exprs) .+ collect(1:n))
+newexprlabel(model::Model, id::Int) = Symbol(:expr, length(model.instruments[id].exprs)+1)
+newexprlabel(model::Model, id::Int, n::Int) = Symbol.(Ref(:expr), length(model.instruments[id].exprs) .+ collect(1:n))
+
+addexpr!(w::Wrap{Model}, args...; kw...) = addexpr!(wrappee(w), args...; kw...)
 
 addexpr!(model::Model                                 , expr::Expr         ; cmp=true) = addexpr!(model,  1, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
 addexpr!(model::Model                                 , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
@@ -144,18 +157,17 @@ addexpr!(model::Model,          label::Symbol         , expr::Expr         ; cmp
 addexpr!(model::Model,          label::Symbol         , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [label]                               , [:(+$symbol)]; cmp=[cmp])
 addexpr!(model::Model,          labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=true) = addexpr!(model,  1,  labels                               , exprs        ; cmp=fill(cmp, length(exprs)))
 
-
 function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=Vector{Bool}())
     (length(cmp) == 0)  && (cmp = fill(true, length(exprs)))
     @assert length(labels) == length(exprs)
     @assert length(cmp) == length(exprs)
 
-    instrument = instruments(model, id)
-    labels = [instrument.exprnames; labels]
-    exprs = [instrument.exprs; exprs]
-    cmp = [instrument.exprcmp; cmp]
-    deleteat!(instruments(model), id)
-    instrument = Instrument(instrument.label, instrument.domain)
+    instr = model.instruments[id]
+    labels = [instr.exprnames; labels]
+    exprs = [instr.exprs; exprs]
+    cmp = [instr.exprcmp; cmp]
+    instrdelete!(model, id)
+    instr = Instrument(instr.label, instr.domain)
     
     function parse_model_expr(expr::Union{Symbol, Expr}, cnames, accum=Vector{Symbol}())
         if typeof(expr) == Expr
@@ -186,26 +198,26 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
     # Check which components are involved
     compinvolved = Vector{Symbol}()
     for expr in exprs
-        compinvolved = unique([compinvolved; parse_model_expr(expr, keys(components(model)))])
+        compinvolved = unique([compinvolved; parse_model_expr(expr, keys(model.comp))])
     end
 
     # Sort involved components according to insertion order
-    kk = keys(components(model))
+    kk = keys(model.comp)
     sort!(compinvolved, lt=(a, b) -> findall(a .== kk)[1] < findall(b .== kk)[1])
     
     # Prepare the code for model evaluation
     code = Vector{String}()
     tmp = ""
-    for (cname, comp) in components(model)
+    for (cname, comp) in model.comp
         for (pname, wpar) in getparams(comp)
             tmp *= ", $(cname)$(compsep)$(pname)::Float64"
         end
     end
-    push!(code, "(_instrument::Instrument $tmp, _unused_...) -> begin")
+    push!(code, "(_instr::Instrument $tmp, _unused_...) -> begin")
     # The last argument, _unused_, allows to push! further
     # components in the model after an expression has already been
     # prepared
-    for (cname, comp) in components(model)
+    for (cname, comp) in model.comp
         if cname in compinvolved
             i = findall(cname .== compinvolved)[1]
             tmp = ""
@@ -215,41 +227,41 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
                                              replace(par.expr, "this$(compsep)" => "$(cname)$(compsep)")))
                 tmp *= ", $(cname)$(compsep)$(pname)"
             end
-            push!(code, "  $cname = _evaluate!(_instrument.compevals[$i], _instrument.domain $tmp)")
+            push!(code, "  $cname = _evaluate!(_instr.compevals[$i], _instr.domain $tmp)")
         end
     end
 
     exprevals = Vector{Vector{Float64}}()
     for i in 1:length(exprs)
-        push!(code, "  @. _instrument.exprevals[$i] = (" * string(exprs[i]) * ")")
-        push!(exprevals, Vector{Float64}(undef, length(instrument.domain)))
+        push!(code, "  @. _instr.exprevals[$i] = (" * string(exprs[i]) * ")")
+        push!(exprevals, Vector{Float64}(undef, length(instr.domain)))
     end
-    push!(code, "  _instrument.counter += 1")
+    push!(code, "  _instr.counter += 1")
     push!(code, "  return nothing")
     push!(code, "end")
     funct = eval(Meta.parse(join(code, "\n")))
 
     compevals = Vector{CompEvaluation}()
-    for (cname, comp) in components(model)
+    for (cname, comp) in model.comp
         if cname in compinvolved
-            tmp = CompEvaluation(0, compdata(instrument.domain, comp),
+            tmp = CompEvaluation(0, compdata(instr.domain, comp),
                                  Vector{Float64}(undef, paramcount(comp)),
-                                 Vector{Float64}(undef, length(instrument.domain)))
+                                 Vector{Float64}(undef, length(instr.domain)))
             tmp.lastParams .= NaN
             push!(compevals, tmp)
         end
     end
 
-    instrument.code = join(code, "\n")
-    instrument.funct = funct
-    instrument.counter = 0
-    instrument.compnames = compinvolved
-    instrument.compevals = compevals
-    instrument.exprnames = deepcopy(labels)
-    instrument.exprs = deepcopy(exprs)
-    instrument.exprcmp = cmp
-    instrument.exprevals = exprevals
-    insert!(instruments(model), id, instrument)
+    instr.code = join(code, "\n")
+    instr.funct = funct
+    instr.counter = 0
+    instr.compnames = compinvolved
+    instr.compevals = compevals
+    instr.exprnames = deepcopy(labels)
+    instr.exprs = deepcopy(exprs)
+    instr.exprcmp = cmp
+    instr.exprevals = exprevals
+    insert!(model.instruments, id, instr)
     evaluate!(model)
     return model
 end
@@ -274,13 +286,14 @@ end
 _evaluate!(instrument::Instrument, pvalues::Vector{Float64}) = Base.invokelatest(instrument.funct, instrument, pvalues...)
 
 function evaluate!(model::Model, pvalues::Vector{Float64})
-    for instrument in instruments(model)
-        _evaluate!(instrument, pvalues)
+    for ii in 1:length(model.instruments)
+        _evaluate!(model.instruments[ii], pvalues)
     end
     return model
 end
 
 evaluate!(model::Model) = evaluate!(model, getparamvalues(model))
+evaluate!(w::Wrap{Model}) = evaluate!(wrappee(w))
 
 
 # ____________________________________________________________________
@@ -291,20 +304,11 @@ Prepare a model to be evaluated on the given domain, with the given
 mathematical expression.
 """
 
-function addinstrument!(model::Model, domain::AbstractDomain; label="none")
-    push!(instruments(model), Instrument(label, domain))
-    return length(instruments(model))
+function addinstrument!(w::Wrap{Model}, domain::AbstractDomain; label="none")
+    model = wrappee(w)
+    push!(model.instruments, Instrument(label, domain))
+    return length(model.instruments)
 end
-
-
-# function addinstrument!(model::Model)
-#     bkg = deepcopy(model)
-#     empty!(getfield(model, :instruments))
-#     for instrument in instruments(bkg)
-#         addinstrument!(model, instrument.domain, instrument.exprs)
-#     end
-#     return model
-# end
 
 
 # ____________________________________________________________________
@@ -319,43 +323,27 @@ end
 
 Return the domain associated to a model.
 """
-domain(model::Model, id=1) = instruments(model, id).domain
+domain(w::Wrap{Model}, id=1) = wrappee(w[id]).domain
 
 
 # ____________________________________________________________________
-"""
-# evalcounter
-
-Return the number of times the model has been evaluated.
-"""
-evalcounter(model::Model, id::Int=1) = instruments(model, id).counter
-
-"""
-# evalcounter
-
-Return the number of times a component has been evaluated.
-"""
-evalcounter(model::Model, id::Int, cname::Symbol) = getceval(instruments(model, id), cname).counter
-
-"""
-# resetcounters!
-
-Reset model and components evaluation counters.
-"""
-function resetcounters!(model::Model)
-    for instrument in instruments(model)
-        instrument.counter = 0
-        for ceval in instrument.compevals
-            ceval.counter = 0
-        end
-    end
-end
+#evalcounter(model::Model, id::Int=1) = model[id]).counter
+#evalcounter(model::Model, id::Int, cname::Symbol) = getceval(model[id], cname).counter
+#function resetcounters!(model::Model)
+#    for instrument in instruments(model)
+#        instrument.counter = 0
+#        for ceval in instrument.compevals
+#            ceval.counter = 0
+#        end
+#    end
+#end
 
 
 # ____________________________________________________________________
 function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, iter=1)
     model = Model(:test => comp)
-    addinstrument!(model, domain, :(+test))
+    addinstrument!(model, domain)
+    addexpr!(model, :(+test))
 
     printstyled(color=:magenta, bold=true, "First evaluation:\n")
     @time result = evaluate!(model)
@@ -366,7 +354,7 @@ function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, i
         @time begin
             for i in 1:iter
                 result = evaluate!(model)
-                instruments(model, 1).compevals[1].lastParams[1] = NaN  # Force re-calculation
+                wrappee(model).instruments[1].compevals[1].lastParams[1] = NaN  # Force re-calculation
             end
         end
     end
@@ -387,11 +375,12 @@ support_param_limits(f::AbstractMinimizer) = false
 
 Fit a model against data, using the specified minimizer.
 """
-function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:AbstractMeasures
+function fit(w::Wrap{Model}, data::Vector{T}; minimizer=Minimizer()) where T<:AbstractMeasures
+    model = wrappee(w)
     elapsedTime = Base.time_ns()
 
     @assert typeof(minimizer) <: AbstractMinimizer
-    @assert length(instruments(model)) >= 1
+    @assert length(model.instruments) >= 1
 
     # Check if the minimizer supports bounded parameters
     params = getfield.(values(getparams(model)), :par)
@@ -419,16 +408,12 @@ function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abst
     c1d_results = fill(0., length(c1d_measure))
 
     # Inner function to evaluate all the models and store the result in a 1D array
-    all_instrument = instruments(model)
     function evaluate1D(freepvalues::Vector{Float64})
         pvalues[ifree] .= freepvalues
         evaluate!(model, pvalues)
-
-        ii = 1
-        for instrument in all_instrument
-            for v in instrument.exprevals
+        for ii in 1:length(model.instruments)
+            for v in model.instruments[ii].exprevals
                 c1d_results[c1d_len[ii]+1:c1d_len[ii+1]] .= v
-                ii += 1
             end
         end
         return c1d_results
@@ -442,40 +427,39 @@ function fit(model::Model, data::Vector{T}; minimizer=Minimizer()) where T<:Abst
     pvalues[ifree] .= bestfit_val
     uncert = fill(NaN, length(pvalues))
     uncert[ifree] .= bestfit_unc
-
-    bestfit = OrderedDict{Symbol, BestFitComp}()
-    ii = 1
-    for (cname, comp) in components(model)
-        bestfitcomp = OrderedDict{Symbol, Union{BestFitParam, Vector{BestFitParam}}}()
-        accum = Vector{BestFitParam}()
+    
+    bestfit = OrderedDict{Symbol, FitComp}()
+    ii = 0
+    for (cname, comp) in model.comp
+        fitcomp = OrderedDict{Symbol, Union{FitParam, Vector{FitParam}}}()
+        accum = Vector{FitParam}()
         lastpname = :-
         for (pname, wpar) in getparams(comp)
             if (wpar.index == 0)  &&  (length(accum) > 0)
-                bestfitcomp[lastpname] = deepcopy(accum)
+                fitcomp[lastpname] = deepcopy(accum)
                 empty!(accum)
             end
 
-            tmp = BestFitParam(pvalues[ii], uncert[ii]); ii += 1
+            ii += 1
             if wpar.index == 0
-                bestfitcomp[pname] = tmp
+                fitcomp[pname] = FitParam(pvalues[ii], uncert[ii])
             else
-                push!(accum, tmp)
+                push!(accum, FitParam(pvalues[ii], uncert[ii]))
                 lastpname = wpar.pname
             end
         end
-        if length(accum) > 0
-            bestfitcomp[lastpname] = deepcopy(accum)
-        end
-        bestfit[cname] = BestFitComp(bestfitcomp)
+        (length(accum) > 0)  &&  (fitcomp[lastpname] = deepcopy(accum))
+        bestfit[cname] = FitComp(fitcomp)
     end
-    result = FitResult(deepcopy(minimizer), BestFit(bestfit),
+
+    result = FitResult(deepcopy(minimizer), bestfit,
                        length(c1d_measure),
                        length(c1d_measure) - length(ifree),
                        sum(abs2, (c1d_measure .- c1d_results) ./ c1d_uncert),
                        status, float(Base.time_ns() - elapsedTime) / 1.e9)
-    return result
+    return Wrap{FitResult}(result)
 end
-fit(model::Model, data::AbstractData; minimizer=Minimizer()) = fit(model, [data]; minimizer=minimizer)
+fit(w::Wrap{Model}, data::AbstractData; minimizer=Minimizer()) = fit(w, [data]; minimizer=minimizer)
 
 
 # ====================================================================

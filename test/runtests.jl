@@ -105,7 +105,8 @@ end
 data = Measures(d + randn(rng, size(d)), 1.)
 
 model = Model(:comp1 => FuncWrap(f, 1, 2))
-addinstrument!(model, flatten(dom), :comp1)
+addinstrument!(model, flatten(dom))
+addexpr!(model, :comp1)
 result = fit(model, data)
 
 
