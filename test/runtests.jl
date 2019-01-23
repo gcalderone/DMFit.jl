@@ -20,47 +20,47 @@ using DataFitting
 dom = Domain(x)
 data = Measures(y + noise, 1.)
 
-model1 = Model(:comp1 => FuncWrap(f, params...))
-addinstrument!(model1, dom)
-addexpr!(model1, 1, :comp1)
+model = Model(:comp1 => FuncWrap(f, params...))
+addinstrument!(model, dom)
+addexpr!(model, 1, :comp1)
 
-model1.comp1.p[1].val = 1
-model1.comp1.p[2].val = 1.e-3
+model.comp1.p[1].val = 1
+model.comp1.p[2].val = 1.e-3
 
-result1 = fit(model1, data)
+result = fit(model, data)
 
 
 f1(x, p1, p2, p3) = @.  p1  +  p2 * x  +  p3 * x^2
 f2(x, p4, p5) = @. p4 * sin(p5 * x)
 f3(x) = cos.(x)
 
-model2 = Model(:comp1 => FuncWrap(f1, params[1], params[2], params[3]),
+model = Model(:comp1 => FuncWrap(f1, params[1], params[2], params[3]),
                :comp2 => FuncWrap(f2, params[4], params[5]),
                :comp3 => FuncWrap(f3))
-addinstrument!(model2, dom)
-addexpr!(model2, :((comp1 + comp2) * comp3))
-result2 = fit(model2, data)
+addinstrument!(model, dom)
+addexpr!(model, :((comp1 + comp2) * comp3))
+result = fit(model, data)
 
 
 
 noise = randn(rng, length(x));
 data2 = Measures(1.3 * (y + noise), 1.3)
 
-addcomponent!(model2, :calib=>SimpleParam(1))
-addinstrument!(model2, dom)
-addexpr!(model2, 2, :(calib * ((comp1 + comp2) * comp3)))
-result2 = fit(model2, [data, data2])
+addcomponent!(model, :calib=>SimpleParam(1))
+addinstrument!(model, dom)
+addexpr!(model, 2, :(calib * ((comp1 + comp2) * comp3)))
+result = fit(model, [data, data2])
 
 
 
 
-resetcounters!(model2)
+resetcounters!(model)
 
 
-dump(result2)
+dump(result)
 
-println(result2.bestfit.comp1.p[1].val)
-println(result2.bestfit.comp1.p[1].unc)
+println(result.bestfit.comp1.p[1].val)
+println(result.bestfit.comp1.p[1].unc)
 
 
 test_component(dom, FuncWrap(f, params...), 1000)

@@ -11,16 +11,37 @@ mutable struct PrintSettings
 end
 const ps = PrintSettings("", "", "", "", 0, false, false, :magenta, :light_blue)
 
-printerr( io::IO, args...) = printstyled(io, args..., "\n"; bold=true, color=:red)
-function printmain(io::IO, args...; newline=true)
+function showcompact(b::Bool=true)
     global ps
-    printstyled(io, args...; bold=true, color=ps.colormain)
+    ps.compact = b
+end
+
+function printbold()
+    global ps
+    (ps.compact)  &&  return false
+    return true
+end
+function printcolormain()
+    global ps
+    (ps.compact)  &&  return :default
+    return ps.colormain
+end
+function printcolortable()
+    global ps
+    (ps.compact)  &&  return :default
+    return ps.colortable
+end
+function printerr( io::IO, args...)
+    printstyled(io, args..., "\n"; bold=printbold(), color=:red)
+end
+function printmain(io::IO, args...; newline=true)
+    printstyled(io, args...; bold=printbold(), color=printcolormain())
     (newline)  &&  (println(io))
 end
 function printsub(io::IO, args...; newline=true)
     global ps
     print(io, ps.prefix)
-    printstyled(io, args...; bold=true)
+    printstyled(io, args...; bold=printbold())
     (newline)  &&  (println(io))
 end
 
@@ -39,9 +60,9 @@ function printhead(io::IO, args...)
     ps.pendingrule = false
     
     tmp = join(fill("─", ps.width))
-    printstyled(io, color=ps.colortable, ps.prefix, "╭", ps.head, "╮\n", ps.prefix, "│")
-    printstyled(io, bold=true, color=ps.colortable, args...)
-    printstyled(io, color=ps.colortable, "│")
+    printstyled(io, color=printcolortable(), ps.prefix, "╭", ps.head, "╮\n", ps.prefix, "│")
+    printstyled(io, bold=printbold(), color=printcolortable(), args...)
+    printstyled(io, color=printcolortable(), "│")
     println(io)
 end
 function printcell(io::IO, args...; lastingroup=false, tail=false)
@@ -49,20 +70,20 @@ function printcell(io::IO, args...; lastingroup=false, tail=false)
     (ps.compact)  &&  (return println(io, args...))    
     if ps.pendingrule
         tmp = join(fill("─", ps.width))
-        printstyled(io, color=ps.colortable, ps.prefix, "├")
+        printstyled(io, color=printcolortable(), ps.prefix, "├")
         print(io, ps.rule)
-        printstyled(io, color=ps.colortable, "┤")
+        printstyled(io, color=printcolortable(), "┤")
         println(io)
         ps.pendingrule = false
     else
         ps.pendingrule = lastingroup
     end
-    printstyled(io, color=ps.colortable, ps.prefix, "│")
+    printstyled(io, color=printcolortable(), ps.prefix, "│")
     printstyled(io, args...)#, color=(lastingroup ? :underline : :default))
     tmp = length(sprint(print, args...))+1
     if tmp <= ps.width
         tmp = join(fill(" ", ps.width-tmp))
-        printstyled(io, color=ps.colortable, tmp, "│")
+        printstyled(io, color=printcolortable(), tmp, "│")
     end
     println(io)
 end
@@ -70,7 +91,7 @@ function printtail(io::IO)
     global ps
     (ps.compact)  &&  (return nothing)
     tmp = join(fill("─", ps.width))
-    printstyled(io, color=ps.colortable, ps.prefix, "╰", ps.tail, "╯\n")
+    printstyled(io, color=printcolortable(), ps.prefix, "╰", ps.tail, "╯\n")
     ps.pendingrule = false
 end
 
@@ -243,10 +264,9 @@ function show(io::IO, model::Model)
         end
     end
     #Check available space to fill the terminal
-    if displaysize(io)[2] >= 80
+    availlength = exprmaxlength
+    if (isa(io, IOContext))  &&  (displaysize(io)[2] >= 80)
         availlength = displaysize(io)[2]-76-length(ps.prefix)
-    else
-        availlength = exprmaxlength
     end
     (availlength > exprmaxlength)  &&  (availlength = exprmaxlength)
     (availlength < 4)  &&  (availlength = 4) # Leave space for "Expr" header
@@ -259,7 +279,7 @@ function show(io::IO, model::Model)
         println(io)
 
         printsub(io, "Evaluated expression(s):")
-        printhead(io, @sprintf "%2s%-15s │ %7s │ %10s │ %10s │ %10s │ %1s │ %s " "" "Label" "Counter" "Min" "Max" "Mean" "W" "Expr"*join(fill(" ", availlength-4)))
+        printhead(io, @sprintf "%2s%-15s │ %7s │ %10s │ %10s │ %10s │ %1s │ %s " "" "Label" "Counter" "Min" "Max" "Mean" "⚠" "Expr"*join(fill(" ", availlength-4)))
 
         for jj in 1:length(instrument.compevals)
             cname = instrument.compnames[jj]
@@ -339,17 +359,17 @@ function show(io::IO, f::FitResult)
     println(io, @sprintf("    #Data  : %10d              Cost: %10.5g", f.ndata, f.cost))
     println(io, @sprintf("    #Param : %10d              DOF : %10d", f.ndata-f.dof, f.dof))
     println(io, @sprintf("    Elapsed: %10.4g s            Red.: %10.4g", f.elapsed, f.cost / f.dof))
-    printstyled(io, "    Status :  ", bold=true)
+    printstyled(io, "    Status :  ", bold=printbold())
     if f.status == :Optimal
-        printstyled(color=:green, io, "Optimal", bold=true)
+        printstyled(color=:green, io, "Optimal", bold=printbold())
     elseif f.status == :NonOptimal
-        printstyled(color=:yellow, io, "non-Optimal, see fitter output", bold=true)
+        printstyled(color=:yellow, io, "non-Optimal, see fitter output", bold=printbold())
     elseif f.status == :Warn
-        printstyled(color=:yellow, io, "Warning, see fitter output", bold=true)
+        printstyled(color=:yellow, io, "Warning, see fitter output", bold=printbold())
     elseif f.status == :Error
-        printstyled(color=:red, io, "Error, see fitter output", bold=true)
+        printstyled(color=:red, io, "Error, see fitter output", bold=printbold())
     else
-        printstyled(color=:magenta, io, "Unknown (" * string(f.status) * "), see fitter output", bold=true)
+        printstyled(color=:magenta, io, "Unknown (" * string(f.status) * "), see fitter output", bold=printbold())
     end
     println(io)
 end

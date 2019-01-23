@@ -66,6 +66,28 @@ getproperty(res::BestFitComp, s::Symbol) = get(getfield(res, :params), s, nothin
 
 
 
+struct InstrumentExpr
+    keys::Vector{Symbol}
+    val::Vector{Vector{Float64}}
+end
+
+function getindex(model::Model, id::Int=1)
+    instr = instruments(model, id)
+    ie = OrderedDict{Symbol, Vector{Float64}}()
+    for ii in 1:length(instr.compnames)
+        ie[instr.compnames[ii]] = instr.compevals[ii].result
+    end
+    for ii in 1:length(instr.exprnames)
+        ie[instr.exprnames[ii]] = instr.exprevals[ii]
+    end
+    return InstrumentExpr(collect(keys(ie)), collect(values(ie)))
+end
+
+propertynames(res::InstrumentExpr) = collect(getfield(res, :keys))
+getproperty(res::InstrumentExpr, s::Symbol) = getfield(res, :val)[findall(getfield(res, :keys) .== s)[1]]
+
+
+
 # ____________________________________________________________________
 """
 # paramcount
@@ -299,17 +321,6 @@ Return the domain associated to a model.
 """
 domain(model::Model, id=1) = instruments(model, id).domain
 
-
-"""
-Returns a component evaluation.
-"""
-function getindex(model::Model, id::Int=1, expr::Int=1)
-    out = instruments(model, id).exprevals
-    @assert expr <= length(out) "Invalid expression index: $expr"
-    return out[expr]
-end
-getindex(model::Model, id::Int, cname::Symbol) =
-    getceval(instruments(model, id), cname).result
 
 # ____________________________________________________________________
 """
