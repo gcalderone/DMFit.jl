@@ -72,6 +72,12 @@ end
 # ____________________________________________________________________
 # Model domains
 #
+function add_dom!(w::Wrap{Model}, dom::AbstractDomain)
+    model = wrappee(w)
+    push!(model.instruments, Instrument(flatten(dom)))
+    return length(model.instruments)
+end
+
 function add_dom!(w::Wrap{Model}, args...)
     model = wrappee(w)
     push!(model.instruments, Instrument(Domain(args...)))

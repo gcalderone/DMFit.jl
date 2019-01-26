@@ -1,4 +1,3 @@
-using Test
 using Random
 
 f(x, p1, p2, p3, p4, p5) = @. (p1  +  p2 * x  +  p3 * x^2  +  p4 * sin(p5 * x))  *  cos(x)
@@ -17,20 +16,19 @@ rng = MersenneTwister(0);
 noise = randn(rng, length(x));
 
 using DataFitting
-dom = Domain(x)
 data = Measures(y + noise, 1.)
 
 model = Model(:comp1 => FuncWrap(f, params...))
-addinstrument!(model, dom)
+add_dom!(model, x)
 addexpr!(model, 1, :comp1)
 
 model.comp1.p[1].val = 1
 model.comp1.p[2].val = 1.e-3
 
-result = fit(model, data)
+result = fit!(model, data)
 
 
-addcomponent!(model, :ss => DataFitting.Smooth(2))
+addcomp!(model, :ss => DataFitting.Smooth(2))
 addexpr!(model, 1, :(ss(comp1)))
 
 
@@ -42,19 +40,19 @@ f3(x) = cos.(x)
 model = Model(:comp1 => FuncWrap(f1, params[1], params[2], params[3]),
               :comp2 => FuncWrap(f2, params[4], params[5]),
               :comp3 => FuncWrap(f3))
-addinstrument!(model, dom)
+add_dom!(model, x)
 addexpr!(model, :((comp1 .+ comp2) .* comp3))
-result = fit(model, data)
+result = fit!(model, data)
 
 
 
 noise = randn(rng, length(x));
 data2 = Measures(1.3 * (y + noise), 1.3)
 
-addcomponent!(model, :calib=>SimpleParam(1))
-addinstrument!(model, dom)
+addcomp!(model, :calib=>ScalarParam(1))
+add_dom!(model, x)
 addexpr!(model, 2, :(calib .* ((comp1 .+ comp2) .* comp3)))
-result = fit(model, [data, data2])
+result = fit!(model, [data, data2])
 
 
 
@@ -62,7 +60,7 @@ println(result.comp1.p[1].val)
 println(result.comp1.p[1].unc)
 
 
-test_component(dom, FuncWrap(f, params...), 1000)
+test_component(FuncWrap(f, params...), x; iter=1000)
 @time for i in 1:1000
     dummy = f(x, params...)
 end
@@ -104,9 +102,9 @@ end
 data = Measures(d + randn(rng, size(d)), 1.)
 
 model = Model(:comp1 => FuncWrap(f, 1, 2))
-addinstrument!(model, flatten(dom))
+add_dom!(model, dom)
 addexpr!(model, :comp1)
-result = fit(model, data)
+result = fit!(model, data)
 
 
 model.comp1.p[1].val  = 1   # guess initial value
@@ -114,7 +112,7 @@ model.comp1.p[1].low  = 0.5 # lower limit
 model.comp1.p[1].high = 1.5 # upper limit
 model.comp1.p[2].val  = 2.4
 model.comp1.p[2].fixed = true
-result = fit(model, data)
+result = fit!(model, data)
 
 
 
@@ -125,12 +123,12 @@ model.comp1.p[1].high = +Inf
 model.comp1.p[2].expr = "2 * comp1_p1"
 model.comp1.p[2].fixed = true
 recompile!(model)
-result = fit(model, data)
+result = fit!(model, data)
 
 model.comp1.p[2].expr = "comp1_p1 + comp1_p2"
 model.comp1.p[2].fixed = false
 recompile!(model)
-result = fit(model, data)
+result = fit!(model, data)
 
 
 

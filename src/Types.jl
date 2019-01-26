@@ -173,8 +173,11 @@ size(data::AbstractData) = size(data.val)
 size(data::AbstractData, dim::Int) = size(data.val)[dim]
 
 # Methods to "flatten" a multidimensional object <: AbstractData into a 1D one
+flatten(dom::AbstractLinearDomain) = dom
+flatten(data::AbstractMeasures, dom::AbstractLinearDomain)::Measures_1D    = Measures_1D(data.val[:], data.unc[:])
 flatten(data::AbstractMeasures, dom::AbstractCartesianDomain)::Measures_1D = Measures_1D(data.val[dom.index], data.unc[dom.index])
-flatten(data::AbstractCounts, dom::AbstractCartesianDomain)::Counts_1D = Counts_1D(data.val[dom.index])
+flatten(data::AbstractCounts  , dom::AbstractLinearDomain)::Counts_1D      = Counts_1D(data.val)
+flatten(data::AbstractCounts  , dom::AbstractCartesianDomain)::Counts_1D   = Counts_1D(data.val[dom.index])
 
 function append!(dest::T, source::T) where T <: AbstractMeasures
     append!(dest.val, source.val)
@@ -233,6 +236,7 @@ mutable struct CompEvaluation
 end
 
 mutable struct Instrument
+    ldomain::AbstractLinearDomain
     domain::AbstractDomain
 
     code::String

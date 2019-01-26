@@ -44,19 +44,29 @@ function model1D(model::Model, buffer=Vector{Float64}())
 end
 
 
-function data1D(model::Model, data::Vector{T}) where T<:AbstractData
+function data1D(model::Model, data::Vector{T}) where T<:AbstractMeasures
     @assert length(data) >= (length(model.index1d)-1) "Not enough dataset(s) for model"
     @assert length(data) <= (length(model.index1d)-1) "Too many dataset(s) for model"
-    out = deepcopy(data[1])
-    for ii in 1:length(data)
-        tmp = model.index1d[ii+1]-model.index1d[ii]
-        @assert(length(data[ii]) == tmp,
-                "Length of dataset $ii do not match corresponding model: " *
-                string(length(data[ii])) * " != " * string(tmp))
-        (ii > 1)  ||  (continue)
-        append!(out, data[ii])
+
+    out = Vector{Measures_1D}()
+    ii = 1
+    for id in 1:length(model.instruments)
+        for jj in 1:length(model.instruments[id].exprnames)
+            (model.instruments[id].exprcmp[jj])  ||  (continue)
+            tmp = length(model.instruments[id].exprevals[jj])
+            @assert(length(data[ii]) == tmp,
+                    "Length of dataset $ii do not match corresponding model: " *
+                    string(length(data[ii])) * " != " * string(tmp))
+            d1 = flatten(data[ii], model.instruments[id].domain)
+            if ii == 1
+                push!(out, d1)
+            else
+                append!(out[1], d1)
+            end
+            ii += 1
+        end
     end
-    return out
+    return out[1]
 end
 
 
@@ -90,7 +100,7 @@ end
 #
 # Instrument constructors
 Instrument(dom::AbstractDomain) = 
-    Instrument(deepcopy(dom), "", ()->nothing, 0,
+    Instrument(flatten(dom), dom, "", ()->nothing, 0,
                Vector{Symbol}(), Vector{CompEvaluation}(),
                Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}())
 
@@ -139,7 +149,7 @@ function Instrument(domain::AbstractDomain, model::Model,
         end
     end
     push!(code, "(_instr::Instrument $tmp, _unused_...) -> begin")
-    push!(code, "  domain = _instr.domain")
+    push!(code, "  domain = _instr.ldomain")
     # The last argument, _unused_, allows to push! further
     # components in the model after an expression has already been
     # prepared

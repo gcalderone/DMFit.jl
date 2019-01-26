@@ -16,7 +16,7 @@ import Base.propertynames
 import Base.getproperty
 import Base.append!
 
-export Measures,
+export Domain, CartesianDomain, Measures,
     FuncWrap, ScalarParam, Smooth,
     Model,
     addcomp!, setenabled!,
