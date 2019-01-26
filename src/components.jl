@@ -12,15 +12,15 @@ outsize(cdata::AbstractComponentData, domain::AbstractDomain) = length(domain)
 # Built-in component: ScalarParam
 #
 struct ScalarParam <: AbstractComponent
-    val::Parameter
+    par::Parameter
     ScalarParam(val::Number) = new(Parameter(val))
 end
 
 struct ScalarParam_cdata <: AbstractComponentData; end
 cdata(comp::ScalarParam, domain::AbstractDomain) = ScalarParam_cdata()
 
-function evaluate!(cdata::ScalarParam_cdata, output::AbstractArray{Float64}, domain::AbstractDomain, val)
-    output .= val
+function evaluate!(cdata::ScalarParam_cdata, output::AbstractArray{Float64}, domain::AbstractDomain, par)
+    output .= par
     return output
 end
 

@@ -90,9 +90,9 @@ function printrow(io::IO, args...; lastingroup=false, sub=false)
         printstyled(io, color=printcolortable(), "┤")
         println(io)
         ps.pendingrule = false
-    else
-        ps.pendingrule = lastingroup
     end
+    ps.pendingrule = lastingroup
+
     printstyled(io, color=printcolortable(), ps.prefix, "│")
     if sub
         printstyled(io, color=printcolorsub(), args...)

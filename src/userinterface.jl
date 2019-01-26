@@ -104,7 +104,7 @@ function replaceexpr!(w::Wrap{Model}, id::Int, label::Symbol, expr::Expr)
     ii = findall(label .== model.instruments[id].exprnames)
     @assert length(ii) == 1 "No expression labelled $label in domain $id"
     model.instruments[id].exprs[ii[1]] = expr
-    recompile!(model, id)
+    _recompile!(model, id)
 end
 
 setflag!(w::Wrap{Model}, label::Symbol, flag::Bool) = setflag!(w, 1, label, flag)
@@ -150,9 +150,9 @@ getproperty(w::Wrap{FitComp}, s::Symbol) = wrappee(w).params[s]
 # ____________________________________________________________________
 # Miscellaneous
 #
-function test_component(domain::AbstractLinearDomain, comp::AbstractComponent, iter=1)
+function test_component(comp::AbstractComponent, args...; iter=1)
     model = Model(:test => comp)
-    add_dom!(model, domain)
+    add_dom!(model, args...)
     addexpr!(model, :(+test))
 
     printstyled(color=:magenta, bold=true, "First evaluation:\n")
