@@ -87,7 +87,7 @@ recompile!(w::Wrap{Model}, id::Int) = _recompile(wrappee(w), id)
 function recompile!(w::Wrap{Model})
     model = wrappee(w)
     for id in 1:length(model.instruments)
-        _recompile(model, id)
+        _recompile!(model, id)
     end
 end
 
@@ -113,6 +113,7 @@ function setflag!(w::Wrap{Model}, id::Int, label::Symbol, flag::Bool)
     ii = findall(label .== model.instruments[id].exprnames)
     @assert length(ii) == 1 "No expression labelled $label in domain $id"
     model.instruments[id].exprcmp[ii[1]] = flag
+    recompile!(w)
 end
 
 

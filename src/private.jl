@@ -112,8 +112,6 @@ function Instrument(domain::AbstractDomain, model::Model,
                     end
                 elseif typeof(arg) == Expr
                     parse_model_expr(arg, cnames, accum)
-                else
-                    println("Not handled: " * string(typeof(arg)))
                 end
             end
         else
