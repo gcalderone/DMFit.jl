@@ -1,3 +1,7 @@
+# ====================================================================
+#                            SHOW METHODS
+# ====================================================================
+
 mutable struct PrintSettings
     prefix::String
     head::String
@@ -8,14 +12,21 @@ mutable struct PrintSettings
     compact::Bool
     colormain::Symbol
     colortable::Symbol
+    colorsub::Symbol
 end
-const ps = PrintSettings("", "", "", "", 0, false, false, :yellow, :light_blue)
+const ps = PrintSettings("", "", "", "", 0, false, false, :yellow, :light_blue, :light_black)
 
 function showcompact(b::Bool=true)
     global ps
     ps.compact = b
 end
 
+function left(s::AbstractString, maxlen::Int)
+    if maxlen < length(s)
+        return s[1:maxlen-1] * "…"
+    end
+    return s
+end
 function printbold()
     global ps
     (ps.compact)  &&  return false
@@ -31,6 +42,11 @@ function printcolortable()
     (ps.compact)  &&  return :default
     return ps.colortable
 end
+function printcolorsub()
+    global ps
+    (ps.compact)  &&  return :default
+    return ps.colorsub
+end
 function printerr( io::IO, args...)
     printstyled(io, args..., "\n"; bold=printbold(), color=:red)
 end
@@ -44,7 +60,6 @@ function printsub(io::IO, args...; newline=true)
     printstyled(io, args...; bold=printbold())
     (newline)  &&  (println(io))
 end
-
 function printhead(io::IO, args...)
     global ps
     (ps.compact)  &&  (return println(io, args...))
@@ -65,7 +80,7 @@ function printhead(io::IO, args...)
     printstyled(io, color=printcolortable(), "│")
     println(io)
 end
-function printcell(io::IO, args...; lastingroup=false, tail=false)
+function printrow(io::IO, args...; lastingroup=false, sub=false)
     global ps
     (ps.compact)  &&  (return println(io, args...))
     if ps.pendingrule
@@ -79,13 +94,29 @@ function printcell(io::IO, args...; lastingroup=false, tail=false)
         ps.pendingrule = lastingroup
     end
     printstyled(io, color=printcolortable(), ps.prefix, "│")
-    printstyled(io, args...)#, color=(lastingroup ? :underline : :default))
+    if sub
+        printstyled(io, color=printcolorsub(), args...)
+    else
+        printstyled(io, args...)#, color=(lastingroup ? :underline : :default))
+    end
     tmp = length(sprint(print, args...))+1
     if tmp <= ps.width
         tmp = join(fill(" ", ps.width-tmp))
         printstyled(io, color=printcolortable(), tmp, "│")
     end
     println(io)
+end
+function printsubrow(io::IO, args...)
+    global ps
+    (ps.compact)  &&  (return println(io, args...))
+    printstyled(io, color=printcolortable(), ps.prefix, "│")
+    printstyled(io, "  ⌊ ", args..., color=:light_black)
+    tmp = length(sprint(print, args...))+1
+    if tmp <= ps.width
+        tmp = join(fill(" ", ps.width-tmp))
+        printstyled(io, color=printcolortable(), tmp, "│")
+    end
+    println(io)    
 end
 function printtail(io::IO)
     global ps
@@ -111,7 +142,7 @@ function show(io::IO, dom::AbstractCartesianDomain)
                      i, length(a),
                      minimum(a), maximum(a),
                      minimum(b), maximum(b))
-        printcell(io, s)
+        printrow(io, s)
     end
     printtail(io)
 end
@@ -125,7 +156,7 @@ function show(io::IO, dom::AbstractLinearDomain)
     for i in 1:ndims(dom)
         s = @sprintf("%3d │ %10.4g │ %10.4g",
                      i, getaxismin(dom, i), getaxismax(dom, i))
-        printcell(io, s)
+        printrow(io, s)
     end
     printtail(io)
 end
@@ -147,13 +178,13 @@ function show(io::IO, dom::Domain_1D)
                  1, length(a),
                  minimum(a), maximum(a),
                  minimum(b), maximum(b))
-    printcell(io, s)
+    printrow(io, s)
     printtail(io)
 end
 
 
 function show(io::IO, data::AbstractData)
-    printsub(io, typeof(data), "   length: ", (length(data.measure)))
+    printsub(io, typeof(data), "   length: ", (length(data.val)))
     printhead(io, @sprintf("%8s │ %10s │ %10s │ %10s │ %10s │ %10s",
                            "", "Min", "Max", "Mean", "Median", "Stddev."))
 
@@ -175,7 +206,7 @@ function show(io::IO, data::AbstractData)
                      string(name),
                      minimum(a), maximum(a),
                      mean(a), median(a), std(a))
-        printcell(io, s)
+        printrow(io, s)
     end
     printtail(io)
 
@@ -191,23 +222,26 @@ end
 function show(io::IO, comp::AbstractComponent; header=true, count=0, cname="")
     (header)  &&  (printsub(io, typeof(comp)))
     if count == 0
-        printhead(io, @sprintf "%-15s │ %-10s │ %10s │ %10s │ %10s │ %s"  "Component" "Param." "Value" "Low" "High" "Notes")
+        printhead(io, @sprintf "%-15s │ %-10s │ %-10s │ %-15s │ %-16s"  "Component" "Param." "Value" "Range" "Description")
     end
 
     localcount = 0; lastcount = length(getparams(comp))
     for (pname, wparam) in getparams(comp)
         localcount += 1
         par = wparam.par
-        note = ""
-        (par.fixed)  &&  (note *= "FIXED")
-        (par.expr != "")  &&  (note *= " expr=" * par.expr)
+        range = (par.fixed  ?  "     FIXED"  :  @sprintf("%7.2g:%-7.2g", par.low, par.high))
+        (par.log)  &&  (range = "L " * range)
         count += 1
-        s = @sprintf("%-15s │ %-10s │ %10.3g │ %10.3g │ %10.3g │ %s",
+        s = @sprintf("%-15s │ %-10s │ %10.3g │ %-15s │ %-16s",
                      cname,
                      (wparam.index >= 1  ?  Symbol(wparam.pname, "[", wparam.index, "]")  :  pname),
-                     par.val, par.low, par.high, note)
-
-        printcell(io, s, lastingroup=(localcount == lastcount))
+                     par.val, range, left(description(comp, wparam.pname), 16))
+        if par.expr != ""
+            printrow(io, s)
+            printrow(io, @sprintf("%-15s    ⌊ %s", "", par.expr), lastingroup=(localcount == lastcount), sub=true)
+        else
+            printrow(io, s, lastingroup=(localcount == lastcount))
+        end
     end
     return count
 end
@@ -219,7 +253,7 @@ function show(io::IO, model::Model)
     printmain(io, "Model components:")
     length(model.comp) != 0  || (return nothing)
 
-    printhead(io, @sprintf "%-15s │ %-30s"  "Component" "Type")
+    printhead(io, @sprintf "%-15s │ %-20s │ %-37s"  "Component" "Type" "Description")
     count = 0
     for (cname, comp) in model.comp
         count += 1
@@ -227,8 +261,8 @@ function show(io::IO, model::Model)
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
 
-        s = @sprintf "%-15s │ %-30s" string(cname) ctype
-        printcell(io, s)
+        s = @sprintf "%-15s │ %-20s │ %-37s" string(cname) ctype left(description(comp), 37)
+        printrow(io, s)
     end
     printtail(io)
     println(io)
@@ -241,30 +275,21 @@ function show(io::IO, model::Model)
     printtail(io)
 
     if length(model.instruments) == 0
-        printmain(io, "Instrument(s) defined: 0")
+        println(io)
+        printmain(io, "Instrument(s): 0")
         return nothing
     end
 
-    printmain(io, )
-    countcmp = 0
-    for ii in 1:length(model.instruments)
-        instr  = model.instruments[ii]
-        countcmp += length(findall(instr.exprcmp))
-    end
-    printmain(io, "Instrument(s) defined: ", length(model.instruments),
-              ".  Dataset(s) required for fitting: ", countcmp, newline=false)
+    tmp = length(model.index1d) - 1
+    (tmp < 0)  &&  (tmp = 0)
+    println(io)
+    printmain(io, "Instrument(s): ", length(model.instruments),
+              ".  Dataset(s) required for fitting: ", tmp, newline=false)
 end
 
 
 show(io::IO, w::Wrap{Instrument}) = show(io, wrappee(w))
 function show(io::IO, instr::Instrument)
-    function left(s::AbstractString, maxlen::Int)
-        if maxlen < length(s)
-            return s[1:maxlen-1] * "…"
-        end
-        return s
-    end
-
     # Check max length of expressions
     exprmaxlength = 0
     for e in instr.exprs
@@ -279,7 +304,7 @@ function show(io::IO, instr::Instrument)
     (availlength > exprmaxlength)  &&  (availlength = exprmaxlength)
     (availlength < 4)  &&  (availlength = 4) # Leave space for "Expr" header
 
-    printmain(io, "Instrument (", instr.label, ") on ", newline=false)
+    printmain(io, "Domain ", newline=false)
     show(io, instr.domain)
     println(io)
 
@@ -294,7 +319,7 @@ function show(io::IO, instr::Instrument)
         v = view(result, findall(isfinite.(result)))
         nan = length(findall(isnan.(result)))
         inf = length(findall(isinf.(result)))
-        printcell(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ ",
+        printrow(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ ",
                                "", cname, ceval.counter,
                                minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : "")),
                   lastingroup=(jj==length(instr.compevals)))
@@ -307,7 +332,7 @@ function show(io::IO, instr::Instrument)
         v = view(result, findall(isfinite.(result)))
         nan = length(findall(isnan.(result)))
         inf = length(findall(isinf.(result)))
-        printcell(io, lastingroup=(localcount == lastcount),
+        printrow(io, lastingroup=(localcount == lastcount),
                   @sprintf("%-2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ %s",
                            (instr.exprcmp[jj]  ?  "⇒"  :  ""),
                            instr.exprnames[jj], instr.counter,
@@ -328,6 +353,9 @@ function show(io::IO, par::Parameter)
             println(io, "Expr : ", par.expr)
         end
     end
+    if par.log
+        println(io, "(use logarithmic value in fit)")
+    end
 end
 
 show(io::IO, par::FitParam) = println(io, par.val, " ± ", par.unc)
@@ -345,7 +373,7 @@ function show(io::IO, comp::FitComp; header=true, cname="")
             for ii in 1:length(params)
                 par = params[ii]
                 spname = string(pname) * "[" * string(ii) * "]"
-                printcell(io, lastingroup=((localcount == lastcount)  &&  (ii == length(params))),
+                printrow(io, lastingroup=((localcount == lastcount)  &&  (ii == length(params))),
                                  @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
                                           spname, par.val, par.unc, par.unc/par.val*100.))
             end
@@ -354,7 +382,7 @@ function show(io::IO, comp::FitComp; header=true, cname="")
             spname = string(pname)
             s = @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
                          spname, par.val, par.unc, par.unc/par.val*100.)
-            printcell(io, s, lastingroup=(localcount == lastcount))
+            printrow(io, s, lastingroup=(localcount == lastcount))
         end
     end
 end

@@ -1,4 +1,8 @@
 # ====================================================================
+#                          TYPE DEFINITIONS
+# ====================================================================
+
+# ____________________________________________________________________
 # Abstract types
 #
 abstract type AbstractDomain end
@@ -15,8 +19,9 @@ abstract type AbstractComponentData end
 abstract type AbstractMinimizer end
 
 
-# ====================================================================
-# Define domain, data and associated methods for ndim=1, 2 and 3
+# ____________________________________________________________________
+# Macro to define domain, data and associated methods for any
+# dimensionality
 #
 macro code_ndim(ndim::Int)
     @assert ndim >= 1 "Number of dimensions must be >= 1"
@@ -114,8 +119,8 @@ macro code_ndim(ndim::Int)
     name = Symbol(:Measures_, ndim, :D)
     push!(out.args, :(
         struct $name <: AbstractMeasures
-            measure::Array{Float64, $(ndim)}
-            uncert::Array{Float64, $(ndim)}
+            val::Array{Float64, $(ndim)}
+            unc::Array{Float64, $(ndim)}
         end;
         Base.ndims(dom::$name) = $ndim;
     ))
@@ -138,7 +143,7 @@ macro code_ndim(ndim::Int)
     name = Symbol(:Counts_, ndim, :D)
     push!(out.args, :(
         struct $name <: AbstractCounts
-            measure::Array{Int, $(ndim)}
+            val::Array{Int, $(ndim)}
         end;
         Base.ndims(dom::$name) = $ndim;
     ))
@@ -158,19 +163,24 @@ macro code_ndim(ndim::Int)
     return esc(out)
 end
 
-# The following methods do not require a macro to be implemented
 getaxismin(dom::AbstractLinearDomain, dim::Int) = dom.vmin[dim]
 getaxismax(dom::AbstractLinearDomain, dim::Int) = dom.vmax[dim]
 getaxisextrema(dom::AbstractLinearDomain, dim::Int) = (dom.vmin[dim], dom.vmax[dim])
 length(dom::AbstractLinearDomain) = dom.length
 length(dom::AbstractCartesianDomain) = length(dom.index)
-length(data::AbstractData) = length(data.measure)
-size(data::AbstractData) = size(data.measure)
-size(data::AbstractData, dim::Int) = size(data.measure)[dim]
+length(data::AbstractData) = length(data.val)
+size(data::AbstractData) = size(data.val)
+size(data::AbstractData, dim::Int) = size(data.val)[dim]
 
 # Methods to "flatten" a multidimensional object <: AbstractData into a 1D one
-flatten(data::AbstractMeasures, dom::AbstractCartesianDomain)::Measures_1D = Measures_1D(data.measure[dom.index], data.uncert[dom.index])
-flatten(data::AbstractCounts, dom::AbstractCartesianDomain)::Counts_1D = Counts_1D(data.measure[dom.index])
+flatten(data::AbstractMeasures, dom::AbstractCartesianDomain)::Measures_1D = Measures_1D(data.val[dom.index], data.unc[dom.index])
+flatten(data::AbstractCounts, dom::AbstractCartesianDomain)::Counts_1D = Counts_1D(data.val[dom.index])
+
+function append!(dest::T, source::T) where T <: AbstractMeasures
+    append!(dest.val, source.val)
+    append!(dest.unc, source.unc)
+    return dest
+end
 
 """
 # reshape
@@ -185,14 +195,9 @@ function reshape(array::AbstractArray, dom::AbstractCartesianDomain)
     return out
 end
 
-struct Wrap{T}
-    _w::T
-end
-wrappee(v::Wrap{T}) where T = getfield(v, :_w)
 
-
-# ====================================================================
-# Parameter and WrapParameter structure
+# ____________________________________________________________________
+# Parameter
 #
 mutable struct Parameter
     val::Float64
@@ -200,31 +205,34 @@ mutable struct Parameter
     high::Float64             # upper limit value
     step::Float64
     fixed::Bool               # true = fixed; false = free
+    log::Bool
     expr::String
-    Parameter(value::Number) = new(float(value), -Inf, +Inf, NaN, false, "")
+    Parameter(value::Number) = new(float(value), -Inf, +Inf, NaN, false, false, "")
 end
 
-
-mutable struct WrapParameter
+# Wrapper for Parameter: it allows to distinguish a scalar parameter
+# (`index` = 0) from a vector of parameters
+mutable struct WParameter
     pname::Symbol
     index::Int
     par::Parameter
 end
 
 
-# ====================================================================
-# CompEvaluation, Instrument and Model structure
+# ____________________________________________________________________
+# Instrument
 #
 mutable struct CompEvaluation
+    enabled::Bool
+    npar::Int
+    log::Vector{Bool}
     counter::Int
     cdata::AbstractComponentData
     lastParams::Vector{Float64}
     result::Vector{Float64}
 end
 
-
 mutable struct Instrument
-    label::String
     domain::AbstractDomain
 
     code::String
@@ -240,19 +248,23 @@ mutable struct Instrument
     exprevals::Vector{Vector{Float64}}
 end
 
-Instrument(label::String, dom::AbstractDomain) =
-    Instrument(label, deepcopy(dom), "", ()->nothing, 0,
-               Vector{Symbol}(), Vector{CompEvaluation}(),
-               Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}())
 
+# ____________________________________________________________________
+# Main Model structure
+#
 mutable struct Model
     comp::OrderedDict{Symbol, AbstractComponent}
+    enabled::OrderedDict{Symbol, Bool}
     instruments::Vector{Instrument}
-    Model() = new(OrderedDict{Symbol, AbstractComponent}(), Vector{Instrument}())
+    index1d::Vector{Int}
+    Model(::Nothing) = new(OrderedDict{Symbol, AbstractComponent}(),
+                           OrderedDict{Symbol, Bool}(),
+                           Vector{Instrument}(),
+                           Vector{Int}())
 end
 
 
-# ====================================================================
+# ____________________________________________________________________
 # Fit results
 #
 struct FitParam
@@ -264,9 +276,7 @@ struct FitComp
     params::OrderedDict{Symbol, Union{FitParam, Vector{FitParam}}}
 end
 
-
 struct FitResult
-    fitter::AbstractMinimizer
     bestfit::OrderedDict{Symbol, FitComp}
     ndata::Int
     dof::Int
@@ -274,67 +284,3 @@ struct FitResult
     status::Symbol      #:Optimal, :NonOptimal, :Warn, :Error
     elapsed::Float64
 end
-
-
-
-# ____________________________________________________________________
-# Built-in component: SimpleParam
-struct SimpleParam <: AbstractComponent
-    val::Parameter
-    SimpleParam(val::Number) = new(Parameter(val))
-end
-
-struct SimpleParam_cdata <: AbstractComponentData; end
-cdata(comp::SimpleParam, domain::AbstractDomain) = SimpleParam_cdata()
-
-function evaluate!(cdata::SimpleParam_cdata, output::AbstractArray{Float64}, domain::AbstractDomain, val)
-    output .= val
-    return output
-end
-
-
-# ____________________________________________________________________
-# Built-in component: FuncWrap
-struct FuncWrap <: AbstractComponent
-    func::Function
-    p::Vector{Parameter}
-
-    function FuncWrap(func::Function, args...)
-        params = Vector{Parameter}()
-        for i in 1:length(args)
-            push!(params, Parameter(args[i]))
-        end
-        return new(func, params)
-    end
-end
-
-struct FuncWrap_cdata <: AbstractComponentData
-    func::Function
-end
-cdata(comp::FuncWrap, domain::AbstractDomain) = FuncWrap_cdata(comp.func)
-
-
-# ____________________________________________________________________
-# Built-in component: Smooth
-struct Smooth <: AbstractComponent
-    n::Int
-    Smooth(n::Number) = new(Int(n))
-end
-
-struct Smooth_cdata <: AbstractComponentData
-    n::Int
-    i::AbstractArray
-end
-cdata(comp::Smooth, domain::AbstractDomain) = Smooth_cdata(comp.n, 1:comp.n:(length(domain)-comp.n))
-outsize(cdata::Smooth_cdata, domain::AbstractDomain) = length(cdata.i)
-isfunction(comp::Smooth) = true
-
-function evaluate!(cdata::Smooth_cdata, output::AbstractArray{Float64}, domain::AbstractDomain, v)
-     output .= [mean(v[i:i+cdata.n-1]) for i in cdata.i]
-    return output
-end
-
-# ____________________________________________________________________
-@code_ndim 1
-@code_ndim 2
-
