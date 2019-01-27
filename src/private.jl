@@ -87,6 +87,7 @@ function getparams(comp::AbstractComponent, enabled::Bool=true)
             out[pname] = WParameter(pname, 0, par)
         elseif typeof(par) == Vector{Parameter}
             for i in 1:length(par)
+                (enabled)  ||  (par[i].fixed = true)
                 out[Symbol(pname, i)] = WParameter(pname, i, par[i])
             end
         end
@@ -271,6 +272,7 @@ function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
         c.counter += 1
         evaluate!(c.cdata, c.result, d, args...)
     else
+        #evaluate!(c.cdata, c.result, d, args...)
         for i in 1:c.npar
             (c.log[i])  &&  (args[i] = 10. ^args[i])
             if c.lastParams[i] != args[i]
@@ -308,9 +310,6 @@ function _evaluate!(model::Model)
     _evaluate!(model, getparamvalues(model))
 end
 
-
-_evaluate!(model::Model, data::Vector{T}) where T<:AbstractData = 
-    _fit(model, data, dry=true)
 
 # ____________________________________________________________________
 # Minimizer

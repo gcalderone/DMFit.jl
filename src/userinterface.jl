@@ -65,7 +65,8 @@ end
 
 function setfixed!(w::Wrap{Model}, s::Symbol, flag::Bool=true)
     model = wrappee(w)
-    model.enabled[s] = flag
+    model.enabled[s] = !flag
+    return w
 end
 
 

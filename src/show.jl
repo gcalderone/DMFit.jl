@@ -9,16 +9,18 @@ mutable struct PrintSettings
     tail::String
     width::Int
     pendingrule::Bool
-    compact::Bool
+    plain::Bool
     colormain::Symbol
     colortable::Symbol
     colorsub::Symbol
+    colorerr::Symbol
 end
-const ps = PrintSettings("", "", "", "", 0, false, false, :yellow, :light_blue, :light_black)
+const ps = PrintSettings("", "", "", "", 0, false, false,
+                         :yellow, :light_blue, :light_black, :light_red)
 
-function showcompact(b::Bool=true)
+function showplain(b::Bool=true)
     global ps
-    ps.compact = b
+    ps.plain = b
 end
 
 function left(s::AbstractString, maxlen::Int)
@@ -29,26 +31,31 @@ function left(s::AbstractString, maxlen::Int)
 end
 function printbold()
     global ps
-    (ps.compact)  &&  return false
+    (ps.plain)  &&  return false
     return true
 end
 function printcolormain()
     global ps
-    (ps.compact)  &&  return :default
+    (ps.plain)  &&  return :default
     return ps.colormain
 end
 function printcolortable()
     global ps
-    (ps.compact)  &&  return :default
+    (ps.plain)  &&  return :default
     return ps.colortable
 end
 function printcolorsub()
     global ps
-    (ps.compact)  &&  return :default
+    (ps.plain)  &&  return :default
     return ps.colorsub
 end
+function printcolorerr()
+    global ps
+    (ps.plain)  &&  return :default
+    return ps.colorerr
+end
 function printerr( io::IO, args...)
-    printstyled(io, args..., "\n"; bold=printbold(), color=:red)
+    printstyled(io, args..., "\n"; bold=printbold(), color=printcolorerr())
 end
 function printmain(io::IO, args...; newline=true)
     printstyled(io, args...; bold=printbold(), color=printcolormain())
@@ -62,7 +69,7 @@ function printsub(io::IO, args...; newline=true)
 end
 function printhead(io::IO, args...)
     global ps
-    (ps.compact)  &&  (return println(io, args...))
+    (ps.plain)  &&  (return println(io, args...))
     tmp = sprint(print, args...)
     ss = split(tmp, "│")
     for i in 1:length(ss)
@@ -80,9 +87,9 @@ function printhead(io::IO, args...)
     printstyled(io, color=printcolortable(), "│")
     println(io)
 end
-function printrow(io::IO, args...; lastingroup=false, sub=false)
+function printrow(io::IO, args...; color=:default, lastingroup=false, sub=false)
     global ps
-    (ps.compact)  &&  (return println(io, args...))
+    (ps.plain)  &&  (return println(io, args...))
     if ps.pendingrule
         tmp = join(fill("─", ps.width))
         printstyled(io, color=printcolortable(), ps.prefix, "├")
@@ -97,7 +104,7 @@ function printrow(io::IO, args...; lastingroup=false, sub=false)
     if sub
         printstyled(io, color=printcolorsub(), args...)
     else
-        printstyled(io, args...)#, color=(lastingroup ? :underline : :default))
+        printstyled(io, args..., color=color)#, color=(lastingroup ? :underline : :default))
     end
     tmp = length(sprint(print, args...))+1
     if tmp <= ps.width
@@ -106,21 +113,9 @@ function printrow(io::IO, args...; lastingroup=false, sub=false)
     end
     println(io)
 end
-function printsubrow(io::IO, args...)
-    global ps
-    (ps.compact)  &&  (return println(io, args...))
-    printstyled(io, color=printcolortable(), ps.prefix, "│")
-    printstyled(io, "  ⌊ ", args..., color=:light_black)
-    tmp = length(sprint(print, args...))+1
-    if tmp <= ps.width
-        tmp = join(fill(" ", ps.width-tmp))
-        printstyled(io, color=printcolortable(), tmp, "│")
-    end
-    println(io)    
-end
 function printtail(io::IO)
     global ps
-    (ps.compact)  &&  (return nothing)
+    (ps.plain)  &&  (return nothing)
     tmp = join(fill("─", ps.width))
     printstyled(io, color=printcolortable(), ps.prefix, "╰", ps.tail, "╯\n")
     ps.pendingrule = false
@@ -253,7 +248,7 @@ function show(io::IO, model::Model)
     printmain(io, "Model components:")
     length(model.comp) != 0  || (return nothing)
 
-    printhead(io, @sprintf "%-15s │ %-20s │ %-37s"  "Component" "Type" "Description")
+    printhead(io, @sprintf "%-15s │ %1s | %-20s │ %-33s"  "Component" "F" "Type" "Description")
     count = 0
     for (cname, comp) in model.comp
         count += 1
@@ -261,8 +256,10 @@ function show(io::IO, model::Model)
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
 
-        s = @sprintf "%-15s │ %-20s │ %-37s" string(cname) ctype left(description(comp), 37)
-        printrow(io, s)
+        s = @sprintf("%-15s │ %1s | %-20s │ %-33s", string(cname),
+                     (model.enabled[cname]  ?  ""  :  "F"),
+                     ctype, left(description(comp), 33))
+        printrow(io, s, color=(model.enabled[cname]  ?  :default  :  printcolorsub()))
     end
     printtail(io)
     println(io)
@@ -317,12 +314,14 @@ function show(io::IO, instr::Instrument)
 
         result = ceval.result
         v = view(result, findall(isfinite.(result)))
+        (length(v) == 0)  &&  (v = [NaN])
         nan = length(findall(isnan.(result)))
         inf = length(findall(isinf.(result)))
         printrow(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ ",
-                               "", cname, ceval.counter,
-                               minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : "")),
-                  lastingroup=(jj==length(instr.compevals)))
+                              "", cname, ceval.counter,
+                              minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : "")),
+                 color=(nan+inf > 0  ?  printcolorerr()  :  :default),
+                 lastingroup=(jj==length(instr.compevals)))
     end
 
     localcount = 0; lastcount = length(instr.exprs)
@@ -374,8 +373,9 @@ function show(io::IO, comp::FitComp; header=true, cname="")
                 par = params[ii]
                 spname = string(pname) * "[" * string(ii) * "]"
                 printrow(io, lastingroup=((localcount == lastcount)  &&  (ii == length(params))),
-                                 @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
-                                          spname, par.val, par.unc, par.unc/par.val*100.))
+                         color=(isfinite(par.unc)  ?  :default  :  printcolorerr()),
+                         @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
+                                  spname, par.val, par.unc, par.unc/par.val*100.))
             end
         else
             par = params
@@ -407,13 +407,13 @@ function show(io::IO, w::Wrap{FitResult})
     if res.status == :Optimal
         printstyled(color=:green, io, "Optimal", bold=printbold())
     elseif res.status == :NonOptimal
-        printstyled(color=:yellow, io, "non-Optimal, see fitter output", bold=printbold())
+        printstyled(color=printcolorerr(), io, "Non Optimal", bold=printbold())
     elseif res.status == :Warn
-        printstyled(color=:yellow, io, "Warning, see fitter output", bold=printbold())
+        printstyled(color=printcolorerr(), io, "Warning", bold=printbold())
     elseif res.status == :Error
-        printstyled(color=:red, io, "Error, see fitter output", bold=printbold())
+        printstyled(color=printcolorerr(), io, "Error", bold=printbold())
     else
-        printstyled(color=:magenta, io, "Unknown (" * string(res.status) * "), see fitter output", bold=printbold())
+        printstyled(color=printcolorerr(), io, "Unknown (" * string(res.status) * "), see fitter output", bold=printbold())
     end
     println(io)
 end
