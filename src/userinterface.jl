@@ -63,7 +63,7 @@ function addcomp!(w::Wrap{Model}, args::Vararg{Pair{Symbol, T}, N}) where {T<:Ab
     return w
 end
 
-function setenabled!(w::Wrap{Model}, s::Symbol, flag::Bool)
+function setfixed!(w::Wrap{Model}, s::Symbol, flag::Bool=true)
     model = wrappee(w)
     model.enabled[s] = flag
 end

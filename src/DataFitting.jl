@@ -19,7 +19,7 @@ import Base.append!
 export Domain, CartesianDomain, Measures,
     FuncWrap, ScalarParam, Smooth,
     Model,
-    addcomp!, setenabled!,
+    addcomp!, setfixed!,
     add_dom!, rm_dom!, dom_count, recompile!,
     addexpr!, replaceexpr!, setflag!,
     evaluate!, fit!,

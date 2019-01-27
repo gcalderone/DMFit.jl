@@ -172,11 +172,25 @@ function Instrument(domain::AbstractDomain, model::Model,
     end
 
     exprevals = Vector{Vector{Float64}}()
-    for i in 1:length(exprs)
-        push!(code, "  " * string(labels[i]) * " = " * string(exprs[i]))
-    end
-    for i in 1:length(exprs)
-        push!(code, "  _instr.exprevals[$i] = " * string(labels[i]))
+    if length(exprs) > 1
+        for i in 1:length(exprs)
+            push!(code, "  " * string(labels[i]) * " = " * string(exprs[i]))
+        end
+        for i in 1:length(exprs)
+            push!(code, "  if length(_instr.exprevals[$i]) == 0")
+            push!(code, "    _instr.exprevals[$i]  = " * string(labels[i]))
+            push!(code, "  else")
+            push!(code, "    _instr.exprevals[$i] .= " * string(labels[i]))
+            push!(code, "  end")
+            push!(exprevals, Vector{Float64}(undef, 0))
+        end
+    else
+        i = 1
+        push!(code, "  if length(_instr.exprevals[$i]) == 0")
+        push!(code, "    _instr.exprevals[$i]  = " * string(exprs[i]))
+        push!(code, "  else")
+        push!(code, "    _instr.exprevals[$i] .= " * string(exprs[i]))
+        push!(code, "  end")
         push!(exprevals, Vector{Float64}(undef, 0))
     end
     push!(code, "  _instr.counter += 1")
@@ -318,13 +332,14 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) 
     # Prepare 1D arrays containing all the data and model results
     data1d = data1D(model, data)
     model1d = model1D(model)
+    Rmodel1d = Ref(model1d)
     
     # Inner function to evaluate all the models and store the result in a 1D array
     function evaluate1D(freepvalues::Vector{Float64})
         pvalues[ifree] .= freepvalues
         _evaluate!(model, pvalues)
-        model1D(model, model1d)
-        return model1d
+        model1D(model, Rmodel1d[])
+        return Rmodel1d[]
     end
 
     status = :NonOptimal
@@ -337,6 +352,7 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) 
             end
         end
 
+        #Main.code_warntype(evaluate1D, (Vector{Float64},))
         (status, bestfit_val, bestfit_unc) = minimize(minimizer, evaluate1D, data1d.val, data1d.unc, params[ifree])
         if length(bestfit_val) != length(ifree)
             error("Length of best fit parameters ($(length(bestfit_val))) do not match number of free parameters ($(length(ifree)))")
