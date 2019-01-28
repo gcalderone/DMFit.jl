@@ -227,7 +227,7 @@ function show(io::IO, comp::AbstractComponent; header=true, count=0, cname="")
         range = (par.fixed  ?  "     FIXED"  :  @sprintf("%7.2g:%-7.2g", par.low, par.high))
         (par.log)  &&  (range = "L " * range)
         count += 1
-        s = @sprintf("%-15s │ %-10s │ %10.3g │ %-15s │ %-16s",
+        s = @sprintf("%-15s │ %-10s │ %10.4g │ %-15s │ %-16s",
                      cname,
                      (wparam.index >= 1  ?  Symbol(wparam.pname, "[", wparam.index, "]")  :  pname),
                      par.val, range, left(description(comp, wparam.pname), 16))

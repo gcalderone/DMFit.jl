@@ -18,11 +18,11 @@ import Base.append!
 
 export Domain, CartesianDomain, Measures,
     FuncWrap, ScalarParam, Smooth,
-    Model,
+    Model, getparamvalues, setparamvalues!,
     addcomp!, setfixed!,
     add_dom!, rm_dom!, dom_count, recompile!,
     addexpr!, replaceexpr!, setflag!,
-    evaluate!, fit!,
+    evaluate!, fit!, fit,
     test_component
 
 const compsep = "_"

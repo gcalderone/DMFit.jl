@@ -16,6 +16,14 @@ function getparams(model::Model)
 end
 
 getparamvalues(v::Union{Model, AbstractComponent}) = [wpar.par.val for (pname, wpar) in getparams(v)]
+function setparamvalues!(v::Union{Model, AbstractComponent}, pval::Vector{Float64})
+    i = 0
+    for (pname, wpar) in getparams(v)
+        i += 1
+        wpar.par.val = pval[i]
+    end
+end
+
 
 function prepareindex1D!(model::Model)
     out = Vector{Int}()
@@ -76,7 +84,7 @@ end
 function getparams(comp::AbstractComponent, enabled::Bool=true)
     out = OrderedDict{Symbol, WParameter}()
     for pname in fieldnames(typeof(comp))
-        par = deepcopy(getfield(comp, pname))
+        par = getfield(comp, pname)
         if typeof(par) == Parameter
             (enabled)  ||  (par.fixed = true)
             if par.log
@@ -316,6 +324,14 @@ end
 #
 support_param_limits(f::AbstractMinimizer) = false
 
+function _fit(model::Model, data::Vector{T}; kw...) where T<:AbstractMeasures
+    pval = getparamvalues(model)
+    res = _fit!(model, data; kw...)
+    setparamvalues!(model, pval)
+    _evaluate!(model)
+    return res
+end
+
 function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) where T<:AbstractMeasures
     elapsedTime = Base.time_ns()
 
@@ -374,6 +390,7 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) 
             end
 
             ii += 1
+            params[ii].val = pvalues[ii] # Update model parameter values
             if wpar.index == 0
                 fitcomp[pname] = FitParam(pvalues[ii], uncert[ii])
             else

@@ -50,6 +50,8 @@ function getproperty(w::Wrap{Instrument}, s::Symbol)
     return nothing
 end
 
+getparamvalues(w::Wrap{Model}) = getparamvalues(wrappee(w))
+setparamvalues!(w::Wrap{Model}, pval::Vector{Float64}) = setparamvalues!(wrappee(w), pval)
 
 # ____________________________________________________________________
 # Components
@@ -131,6 +133,8 @@ evaluate!(w::Wrap{Model}) = _evaluate!(wrappee(w))
 
 fit!(w::Wrap{Model}, data::AbstractData; kw...) = _fit!(wrappee(w), [data]; kw...)
 fit!(w::Wrap{Model}, data::Vector{T}; kw...) where T<:AbstractMeasures = _fit!(wrappee(w), data; kw...)
+fit(w::Wrap{Model}, data::AbstractData; kw...) = _fit(wrappee(w), [data]; kw...)
+fit(w::Wrap{Model}, data::Vector{T}; kw...) where T<:AbstractMeasures = _fit(wrappee(w), data; kw...)
 
 function propertynames(w::Wrap{FitResult})
     res = wrappee(w)
