@@ -277,6 +277,12 @@ function show(io::IO, model::Model)
         return nothing
     end
 
+    for i in 1:length(model.instruments)
+        println(io)
+        printmain(io, "Instrument #$i ")
+        show(io, model.instruments[i])
+    end
+
     tmp = length(model.index1d) - 1
     (tmp < 0)  &&  (tmp = 0)
     println(io)

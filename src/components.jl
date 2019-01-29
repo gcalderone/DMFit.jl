@@ -42,9 +42,6 @@ struct FuncWrap <: AbstractComponent
 end
 description(c::FuncWrap) = "Function wrapper"
 
-struct FuncWrap_cdata <: AbstractComponentData
-    func::Function
-end
 cdata(comp::FuncWrap, domain::AbstractDomain) = FuncWrap_cdata(comp.func)
 
 

@@ -163,6 +163,15 @@ macro code_ndim(ndim::Int)
     return esc(out)
 end
 
+# The following is here, rather than in components.jl, to avoid a
+# compilation error: `FuncWrap_cdata` is used in `@code_ndim`
+struct FuncWrap_cdata <: AbstractComponentData
+    func::Function
+end
+
+@code_ndim 1
+@code_ndim 2
+
 getaxismin(dom::AbstractLinearDomain, dim::Int) = dom.vmin[dim]
 getaxismax(dom::AbstractLinearDomain, dim::Int) = dom.vmax[dim]
 getaxisextrema(dom::AbstractLinearDomain, dim::Int) = (dom.vmin[dim], dom.vmax[dim])
@@ -174,29 +183,31 @@ size(data::AbstractData, dim::Int) = size(data.val)[dim]
 
 # Methods to "flatten" a multidimensional object <: AbstractData into a 1D one
 flatten(dom::AbstractLinearDomain) = dom
+flatten(data::Measures_1D, dom::AbstractLinearDomain)::Measures_1D = data
+flatten(data::Counts_1D, dom::AbstractLinearDomain)::Counts_1D = data
 flatten(data::AbstractMeasures, dom::AbstractLinearDomain)::Measures_1D    = Measures_1D(data.val[:], data.unc[:])
 flatten(data::AbstractMeasures, dom::AbstractCartesianDomain)::Measures_1D = Measures_1D(data.val[dom.index], data.unc[dom.index])
 flatten(data::AbstractCounts  , dom::AbstractLinearDomain)::Counts_1D      = Counts_1D(data.val)
 flatten(data::AbstractCounts  , dom::AbstractCartesianDomain)::Counts_1D   = Counts_1D(data.val[dom.index])
 
-function append!(dest::T, source::T) where T <: AbstractMeasures
-    append!(dest.val, source.val)
-    append!(dest.unc, source.unc)
-    return dest
-end
+# function append!(dest::T, source::T) where T <: AbstractMeasures
+#     append!(dest.val, source.val)
+#     append!(dest.unc, source.unc)
+#     return dest
+# end
 
-"""
-# reshape
-
-Reshape an array according to the size of a CartesianDomain object
-"""
-function reshape(array::AbstractArray, dom::AbstractCartesianDomain)
-    @assert length(array) == length(dom) "Domain and array must have the same length"
-    out = Array{Float64}(undef, size(dom)...)
-    out .= NaN
-    out[dom.index] .= array
-    return out
-end
+# """
+# # reshape
+# 
+# Reshape an array according to the size of a CartesianDomain object
+# """
+# function reshape(array::AbstractArray, dom::AbstractCartesianDomain)
+#     @assert length(array) == length(dom) "Domain and array must have the same length"
+#     out = Array{Float64}(undef, size(dom)...)
+#     out .= NaN
+#     out[dom.index] .= array
+#     return out
+# end
 
 
 # ____________________________________________________________________

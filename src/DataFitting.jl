@@ -29,9 +29,6 @@ const compsep = "_"
 
 include("Types.jl")
 include("components.jl")
-@code_ndim 1
-@code_ndim 2
-
 include("private.jl")
 include("userinterface.jl")
 include("show.jl")

@@ -38,20 +38,6 @@ function prepareindex1D!(model::Model)
 end
 
 
-function model1D(model::Model, buffer=Vector{Float64}())
-    (length(buffer) == 0)  &&  (buffer = Vector{Float64}(undef, model.index1d[end]))
-    ii = 1
-    for id in 1:length(model.instruments)
-        for jj in 1:length(model.instruments[id].exprnames)
-            (model.instruments[id].exprcmp[jj])  ||  (continue)
-            buffer[model.index1d[ii]+1:model.index1d[ii+1]] .= model.instruments[id].exprevals[jj]
-            ii += 1
-        end
-    end
-    return buffer
-end
-
-
 function data1D(model::Model, data::Vector{T}) where T<:AbstractMeasures
     @assert length(data) >= (length(model.index1d)-1) "Not enough dataset(s) for model"
     @assert length(data) <= (length(model.index1d)-1) "Too many dataset(s) for model"
@@ -66,15 +52,11 @@ function data1D(model::Model, data::Vector{T}) where T<:AbstractMeasures
                     "Length of dataset $ii do not match corresponding model: " *
                     string(length(data[ii])) * " != " * string(tmp))
             d1 = flatten(data[ii], model.instruments[id].domain)
-            if ii == 1
-                push!(out, d1)
-            else
-                append!(out[1], d1)
-            end
+            push!(out, d1)
             ii += 1
         end
     end
-    return out[1]
+    return out
 end
 
 
@@ -108,7 +90,7 @@ end
 # Instruments
 #
 # Instrument constructors
-Instrument(dom::AbstractDomain) = 
+Instrument(dom::AbstractDomain) =
     Instrument(flatten(dom), dom, "", ()->nothing, 0,
                Vector{Symbol}(), Vector{CompEvaluation}(),
                Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}())
@@ -322,61 +304,7 @@ end
 # ____________________________________________________________________
 # Minimizer
 #
-support_param_limits(f::AbstractMinimizer) = false
-
-function _fit(model::Model, data::Vector{T}; kw...) where T<:AbstractMeasures
-    pval = getparamvalues(model)
-    res = _fit!(model, data; kw...)
-    setparamvalues!(model, pval)
-    _evaluate!(model)
-    return res
-end
-
-function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) where T<:AbstractMeasures
-    elapsedTime = Base.time_ns()
-
-    @assert typeof(minimizer) <: AbstractMinimizer
-    @assert length(model.instruments) >= 1
-
-    params = getfield.(values(getparams(model)), :par)
-    pvalues = getfield.(params, :val)
-    uncert = fill(NaN, length(pvalues))
-    ifree = findall(.! getfield.(params, :fixed))
-    @assert length(ifree) > 0 "No free parameter in the model"
-
-    # Prepare 1D arrays containing all the data and model results
-    data1d = data1D(model, data)
-    model1d = model1D(model)
-    Rmodel1d = Ref(model1d)
-    
-    # Inner function to evaluate all the models and store the result in a 1D array
-    function evaluate1D(freepvalues::Vector{Float64})
-        pvalues[ifree] .= freepvalues
-        _evaluate!(model, pvalues)
-        model1D(model, Rmodel1d[])
-        return Rmodel1d[]
-    end
-
-    status = :NonOptimal
-    if !dry
-        # Check if the minimizer supports bounded parameters
-        if !support_param_limits(minimizer)
-            if  (length(findall(isfinite.(getfield.(params, :low )))) > 0)  ||
-                (length(findall(isfinite.(getfield.(params, :high)))) > 0)
-                @warn "Parameter bounds are not supported by " * string(typeof(minimizer))
-            end
-        end
-
-        #Main.code_warntype(evaluate1D, (Vector{Float64},))
-        (status, bestfit_val, bestfit_unc) = minimize(minimizer, evaluate1D, data1d.val, data1d.unc, params[ifree])
-        if length(bestfit_val) != length(ifree)
-            error("Length of best fit parameters ($(length(bestfit_val))) do not match number of free parameters ($(length(ifree)))")
-        end
-
-        pvalues[ifree] .= bestfit_val
-        uncert[ifree] .= bestfit_unc
-    end
-    
+function pvalues2FitComp(model::Model, pvalues::Vector{Float64}, uncert::Vector{Float64})
     bestfit = OrderedDict{Symbol, FitComp}()
     ii = 0
     for (cname, comp) in model.comp
@@ -390,7 +318,7 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) 
             end
 
             ii += 1
-            params[ii].val = pvalues[ii] # Update model parameter values
+            wpar.par.val = pvalues[ii] # Update model parameter values
             if wpar.index == 0
                 fitcomp[pname] = FitParam(pvalues[ii], uncert[ii])
             else
@@ -401,10 +329,66 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) 
         (length(accum) > 0)  &&  (fitcomp[lastpname] = deepcopy(accum))
         bestfit[cname] = FitComp(fitcomp)
     end
+    return bestfit
+end
 
-    result = FitResult(bestfit, length(data1d),
-                       length(data1d) - length(ifree),
-                       sum(abs2, (data1d.val .- model1d) ./ data1d.unc),
+
+function _fit(model::Model, data::Vector{T}; kw...) where T<:AbstractMeasures
+    pval = getparamvalues(model)
+    res = _fit!(model, data; kw...)
+    setparamvalues!(model, pval)
+    _evaluate!(model)
+    return res
+end
+
+
+function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) where T<:AbstractMeasures
+    elapsedTime = Base.time_ns()
+
+    @assert typeof(minimizer) <: AbstractMinimizer
+    @assert length(model.instruments) >= 1
+    params = getfield.(values(getparams(model)), :par)
+    pvalues = getfield.(params, :val)
+    uncert = fill(NaN, length(pvalues))
+    ifree = findall(.! getfield.(params, :fixed))
+    @assert length(ifree) > 0 "No free parameter in the model"
+
+    # Prepare 1D arrays for residuals
+    buffer = Vector{Float64}(undef, model.index1d[end])
+    Rbuffer = Ref(buffer)
+    data1d = data1D(model, data)
+
+    # Inner function to evaluate all the models and store the result in a 1D array
+    function func_residuals1d(freepvalues::Vector{Float64},
+                              model=model, pvalues=pvalues, ifree=ifree, data1d=data1d)
+        buffer = Rbuffer[]
+        pvalues[ifree] .= freepvalues
+        _evaluate!(model, pvalues)
+        ii = 1
+        for id in 1:length(model.instruments)
+            for jj in 1:length(model.instruments[id].exprnames)
+                (model.instruments[id].exprcmp[jj])  ||  (continue)
+                buffer[model.index1d[ii]+1:model.index1d[ii+1]] .=
+                    ((data1d[ii].val .- model.instruments[id].exprevals[jj]) ./ data1d[ii].unc)
+                ii += 1
+            end
+        end
+        return buffer
+    end
+    func_residuals1d(getfield.(params[ifree], :val))
+    #Main.code_warntype(func_residuals1d, (Vector{Float64},))
+
+    status = :NonOptimal
+    if !dry
+        (status, bestfit_val, bestfit_unc) = minimize(minimizer, func_residuals1d, params[ifree])
+        @assert length(bestfit_val) == length(ifree)
+        pvalues[ifree] .= bestfit_val
+        uncert[ifree] .= bestfit_unc
+    end
+
+    result = FitResult(pvalues2FitComp(model, pvalues, uncert),
+                       length(buffer), length(buffer) - length(ifree),
+                       sum(abs2, buffer),
                        status, float(Base.time_ns() - elapsedTime) / 1.e9)
     return Wrap{FitResult}(result)
 end
@@ -415,27 +399,15 @@ using LsqFit
 mutable struct Minimizer <: AbstractMinimizer
 end
 
-support_param_limits(f::Minimizer) = false
-
-function minimize(minimizer::Minimizer, evaluate::Function,
-                  measure::Vector{Float64}, uncert::Vector{Float64},
-                  params::Vector{Parameter})
-
-    function callback(dummy::Vector{Float64}, pvalues::Vector{Float64})
-        return evaluate(pvalues)
-    end
-
-    dom = collect(1.:length(measure))
-    bestfit = LsqFit.curve_fit(callback, dom, measure, 1. ./ uncert, getfield.(params, :val))
-
-    # Prepare output
+function minimize(minimizer::Minimizer, func::Function, params::Vector{Parameter})
+    ndata = length(func(getfield.(params, :val)))
+    bestfit = LsqFit.curve_fit((dummy, pvalues) -> func(pvalues),
+                               1.:ndata, fill(0., ndata),
+                               getfield.(params, :val),
+                               lower=getfield.(params, :low),
+                               upper=getfield.(params, :high))
     status = :NonOptimal
-    if bestfit.converged
-        status = :Optimal
-    end
-
+    (bestfit.converged)  &&  (status = :Optimal)
     error = LsqFit.margin_error(bestfit, 0.6827)
     return (status, getfield.(Ref(bestfit), :param), error)
 end
-
-
