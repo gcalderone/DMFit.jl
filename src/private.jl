@@ -329,6 +329,8 @@ function pvalues2FitComp(model::Model, pvalues::Vector{Float64}, uncert::Vector{
 
             ii += 1
             par.val = pvalues[ii] # Update model parameter values
+            par._private.fitval = pvalues[ii]
+            par._private.fitunc = uncert[ii]
             if par._private.index == 0
                 fitcomp[pname] = FitParam(pvalues[ii], uncert[ii])
             else

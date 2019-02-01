@@ -45,45 +45,30 @@ addexpr!(model, :((comp1 .+ comp2) .* comp3))
 result = fit!(model, data)
 
 
-p = DataFitting.probe([data], nstep=(10, 30),
-                      ( model.comp1.p[1],
-                        result.comp1.p[1].unc*1.3),
-                      ( model.comp2.p[2],
-                        result.comp2.p[2].unc*3))
-@gsp p[:,1] p[:,2] p[:,3].-=minimum(p[:,3]) "w p lc palette"
+
+p = probe([model.comp1.p[1]], [data])
+@gp p[:,1] p[:,2] "w l notit"
+
+p = probe([model.comp1.p[1], model.comp2.p[2]], [data])
+@gsp p[:,1] p[:,2] p[:,3] "w p lc palette"
 
 @gsp "set contour" :-
-@gsp :- "set dgrid3d 30,10" :-
+@gsp :- "set dgrid3d 11,11" :-
 @gsp :- "set cntrparam lev incremental 0, 1, 10" :-
-@gsp :- p[:,1] p[:,2] p[:,3].-=minimum(p[:,3]) "w l lc palette"
+@gsp :- p[:,1] p[:,2] p[:,3] "w l notit lc palette"
 
 
-p = DataFitting.probe([data],
-                      ( model.comp1.p[1],
-                       result.comp1.p[1].unc*3),
-                      ( model.comp2.p[2],
-                       result.comp2.p[2].unc*3),  
-                      ( model.comp1.p[2], 
-                       result.comp1.p[2].unc*3))
-c = p[:,4].-minimum(p[:,4])
+p = DataFitting.probe([model.comp1.p[1], model.comp2.p[2], model.comp1.p[2]], [data])
+c = p[:,4]
+c ./= maximum(c)
+c = c .^ 0.5
 
-
-
-@gsp @sprintf("set cbrange [%f:%f]", extrema(c)...) :-
-@gsp :- xr=extrema(p[:,1]) yr=extrema(p[:,2]) zr=extrema(p[:,3]) :-
-last = 0.
-for i in 0.:1.25:maximum(c)
-    j = findall(last .< c .<= i)
-    global last = i
-    if length(j) > 1
-        @gsp :- p[j,1] p[j,2] p[j,3] c[j] " u 1:2:3:(1./\$4):4 w p notit pt 1 ps var lc palette"
-        sleep(0.05)
-    end
-end
-
-
-
-
+color = Int.(
+    2^24 .* round.(255 .* c                            ) .+ 
+    2^16 .* round.(255 .* abs.(sin.(pi   .* c .+ pi/2))) .+
+    2^08 .* round.(255 .* abs.(sin.(pi   .* c .- pi/4))) .+ 
+    2^00 .* round.(255 .* abs.(sin.(pi/4 .* c .+ pi/4)))  )
+@gsp p[:,1] p[:,2] p[:,3] 1.5 .*(c.+0.1) color " w p notit pt 7 ps var lc rgb var"
 
 
 

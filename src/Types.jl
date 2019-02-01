@@ -266,7 +266,9 @@ mutable struct ParameterPrivate
     cname::Symbol
     pname::Symbol
     index::Int
-    ParameterPrivate() = new(nothing, :-, :-, 0)
+    fitval::Float64
+    fitunc::Float64
+    ParameterPrivate() = new(nothing, :-, :-, 0, NaN, NaN)
 end
 
 # Parameter

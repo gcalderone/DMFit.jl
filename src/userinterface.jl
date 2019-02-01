@@ -207,59 +207,115 @@ test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1)
 code(w::Wrap{Instrument}) = println(wrappee(w).code)
 
 
-probe(data::AbstractMeasures, args...) = probe([data], args...)
 
-function probe(data::Vector{T}, args::Vararg{Tuple{Parameter, Number},N}; nstep=20) where {T<:AbstractMeasures, N}
-    for arg in args
-        @assert arg[1]._private.model == args[1][1]._private.model
+function probe(lparams::Vector{Parameter}, data::Vector{T}; delta=3., kw...) where T <: AbstractMeasures
+    (length(lparams) == 0)  &&  (return nothing)
+    (length(data) == 0)  &&  (return nothing)
+    for par in lparams
+        @assert par._private.model == lparams[1]._private.model
     end
-    model = args[1][1]._private.model
+    model = lparams[1]._private.model
     @assert model != nothing
     @assert length(model.instruments) >= 1
     params = collect(values(getparams(model)))
-    pvalues = getfield.(params, :val)
-
-    if isa(nstep, Int)
-        cd = CartesianDomain(fill(nstep, N)...)
-    else
-        cd = CartesianDomain(nstep...)
-    end
-    @assert length(size(cd)) == N
-
+    pvalues0 = getfield.(params, :val)
+    pvalues = deepcopy(pvalues0)
+    
+    data1d = data1D(model, data)
     ipar = Vector{Int}()
-    step = Vector{Float64}()
-    for arg in args
+    range = Vector{Float64}()
+    _evaluate!(model, pvalues0)
+    cost0 = sum(abs2, residuals1d(model, data1d))
+    for par in lparams
         for ii in 1:length(params)
-            if params[ii] == arg[1]
+            if params[ii] == par
                 push!(ipar, ii)
-                push!(step, 2 * arg[2])
-                break
+                @assert isfinite(par._private.fitunc) "The model has not been fit: can't guess step for parameter"
+                pvalues = deepcopy(pvalues0)
+                lo = pvalues0[ii] - par._private.fitunc/2
+                while true
+                    if lo < par.low
+                        lo = par.low
+                        break
+                    end
+                    pvalues[ii] = lo
+                    _evaluate!(model, pvalues)
+                    cost = sum(abs2, residuals1d(model, data1d))
+                    (abs(cost - cost0) >= delta)  &&  break
+                    lo -= par._private.fitunc/2
+                end
+                hi = pvalues0[ii] + par._private.fitunc
+                while true
+                    if lo > par.high
+                        hi = par.high
+                        break
+                    end
+                    pvalues[ii] = hi
+                    _evaluate!(model, pvalues)
+                    cost = sum(abs2, residuals1d(model, data1d))
+                    (abs(cost - cost0) >= delta)  &&  break
+                    hi += par._private.fitunc/2
+                end
+                append!(range, [lo, hi])
             end
         end
     end
-    @assert length(ipar) == N
-    
-    for ii in 1:N
-        cd[ii] .-= length(cd[ii])/2. .+ 0.5
-        cd[ii] .*= step[ii] / (length(cd[ii])-1)
-        cd[ii] .+= params[ipar[ii]].val
+    @assert length(ipar) == length(lparams)
+    _evaluate!(model, pvalues0)
+    rr = collect(reshape(range, 2, div(length(range),2))')
+    return probe(lparams, data, rr; kw...)
+end
+
+
+
+function probe(lparams::Vector{Parameter}, data::Vector{T}, rr::Matrix{Float64}; nstep=11) where {T<:AbstractMeasures}
+    (length(lparams) == 0)  &&  (return nothing)
+    (length(data) == 0)  &&  (return nothing)
+    for par in lparams
+        @assert par._private.model == lparams[1]._private.model
+    end
+    model = lparams[1]._private.model
+    @assert model != nothing
+    @assert length(model.instruments) >= 1
+    params = collect(values(getparams(model)))
+    pvalues0 = getfield.(params, :val)
+    pvalues = deepcopy(pvalues0)   
+    @assert size(rr)[1] == length(lparams)
+
+    data1d = data1D(model, data)
+    _evaluate!(model, pvalues0)
+    cost0 = sum(abs2, residuals1d(model, data1d))
+   
+    tmp = Vector{AbstractArray}()
+    ipar = Vector{Int}()
+    for par in lparams
+        for ii in 1:length(params)
+            if params[ii] == par
+                push!(ipar, ii)
+                push!(tmp, range(rr[length(ipar), 1], stop=rr[length(ipar), 2], length=nstep))
+            end
+        end
+    end
+    @assert length(ipar) == length(lparams)
+
+    if length(lparams) > 1
+        cd = CartesianDomain(tmp...)
+    else
+        cd = Domain(tmp...)
     end
     dom = flatten(cd)
-
-    # Inner function to evaluate all the models and store the result in a 1D array
-    data1d = data1D(model, data)
-    function eval_residuals1d(pvalues::Vector{Float64},
-                              model=model, data1d=data1d)
-        _evaluate!(model, pvalues)
-        return residuals1d(model, data1d)
-    end
-
-    out = Matrix{Float64}(undef, length(dom), N+1)
+    out = Matrix{Float64}(undef, length(dom), length(lparams)+1)
     for ii in 1:length(dom)
-        pvalues[ipar] .= dom.axis[:,ii]
-        eval_residuals1d(pvalues)
-        out[ii, 1:N] .= dom.axis[:,ii]
-        out[ii, N+1] = sum(abs2, model.buffer1d)
+        if length(lparams) > 1
+            pvalues[ipar] .= dom.axis[:,ii]
+            out[ii, 1:end-1] .= dom.axis[:,ii]
+        else
+            pvalues[ipar] .= dom.axis[ii]
+            out[ii, 1] = dom.axis[ii]
+        end
+        _evaluate!(model, pvalues)
+        out[ii, end] = sum(abs2, residuals1d(model, data1d)) .- cost0
     end
+    _evaluate!(model, pvalues0)    
     return out
 end

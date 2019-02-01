@@ -23,7 +23,7 @@ export Domain, CartesianDomain, Measures,
     addcomp!, setfixed!,
     add_dom!, rm_dom!, dom_count,
     addexpr!, replaceexpr!, setflag!,
-    evaluate!, fit!, fit,
+    evaluate!, fit!, fit, probe,
     test_component
 
 const compsep = "_"
