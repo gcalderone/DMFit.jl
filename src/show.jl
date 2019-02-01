@@ -214,26 +214,25 @@ function show(io::IO, data::AbstractData)
 end
 
 
-function show(io::IO, comp::AbstractComponent; header=true, count=0, cname="")
+function show(io::IO, comp::AbstractComponent; header=true, count=0)
     (header)  &&  (printsub(io, typeof(comp)))
     if count == 0
         printhead(io, @sprintf "%-15s │ %-10s │ %-10s │ %-15s │ %-16s"  "Component" "Param." "Value" "Range" "Description")
     end
 
     localcount = 0; lastcount = length(getparams(comp))
-    for (pname, wparam) in getparams(comp)
+    for (pname, param) in getparams(comp)
         localcount += 1
-        par = wparam.par
-        range = (par.fixed  ?  "     FIXED"  :  @sprintf("%7.2g:%-7.2g", par.low, par.high))
-        (par.log)  &&  (range = "L " * range)
+        range = (param.fixed  ?  "     FIXED"  :  @sprintf("%7.2g:%-7.2g", param.low, param.high))
+        (param.log)  &&  (range = "L " * range)
         count += 1
         s = @sprintf("%-15s │ %-10s │ %10.4g │ %-15s │ %-16s",
-                     cname,
-                     (wparam.index >= 1  ?  Symbol(wparam.pname, "[", wparam.index, "]")  :  pname),
-                     par.val, range, left(description(comp, wparam.pname), 16))
-        if par.expr != ""
+                     param._private.cname,
+                     (param._private.index >= 1  ?  Symbol(param._private.pname, "[", param._private.index, "]")  :  pname),
+                     param.val, range, left(description(comp, param._private.pname), 16))
+        if param.expr != ""
             printrow(io, s)
-            printrow(io, @sprintf("%-15s    ⌊ %s", "", par.expr), lastingroup=(localcount == lastcount), sub=true)
+            printrow(io, @sprintf("%-15s    ⌊ %s", "", param.expr), lastingroup=(localcount == lastcount), sub=true)
         else
             printrow(io, s, lastingroup=(localcount == lastcount))
         end
@@ -267,7 +266,7 @@ function show(io::IO, model::Model)
     printsub(io, "Parameters:")
     count = 0
     for (cname, comp) in model.comp
-        count = show(io, comp, cname=string(cname), count=count, header=false)
+        count = show(io, comp, count=count, header=false)
     end
     printtail(io)
 
@@ -407,19 +406,25 @@ function show(io::IO, w::Wrap{FitResult})
 
     println(io)
     println(io, @sprintf("    #Data  : %10d              Cost: %10.5g", res.ndata, res.cost))
-    println(io, @sprintf("    #Param : %10d              DOF : %10d", res.ndata-res.dof, res.dof))
-    println(io, @sprintf("    Elapsed: %10.4g s            Red.: %10.4g", res.elapsed, res.cost / res.dof))
+    println(io, @sprintf("    #Param : %10d              Red.: %-10.4g", res.ndata-res.dof, res.cost / res.dof))
+    print(io, @sprintf("    DOF    : %10d              ", res.dof))
+    if res.log10testprob < -3
+        println(io, @sprintf("Test: 10^%-10.4g", res.log10testprob))
+    else
+        println(io, @sprintf("Test: %10.4g", 10^res.log10testprob))
+    end
     printstyled(io, "    Status :  ", bold=printbold())
     if res.status == :Optimal
-        printstyled(color=:green, io, "Optimal", bold=printbold())
+        printstyled(color=:green, io, @sprintf("%-15s", "Optimal"), bold=printbold())
     elseif res.status == :NonOptimal
-        printstyled(color=printcolorerr(), io, "Non Optimal", bold=printbold())
+        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Non Optimal"), bold=printbold())
     elseif res.status == :Warn
-        printstyled(color=printcolorerr(), io, "Warning", bold=printbold())
+        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Warning"), bold=printbold())
     elseif res.status == :Error
-        printstyled(color=printcolorerr(), io, "Error", bold=printbold())
+        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Error"), bold=printbold())
     else
-        printstyled(color=printcolorerr(), io, "Unknown (" * string(res.status) * "), see fitter output", bold=printbold())
+        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Unknown (" * string(res.status) * "), see fitter output"), bold=printbold())
     end
+    println(io, @sprintf("        Elapsed: %-10.4g s", res.elapsed))
     println(io)
 end

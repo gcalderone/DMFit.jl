@@ -6,7 +6,7 @@ f(x, p1, p2, p3, p4, p5) = @. (p1  +  p2 * x  +  p3 * x^2  +  p4 * sin(p5 * x)) 
 params = [1, 1.e-3, 1.e-6, 4, 5]
 
 # Domain for model evaluation
-x = 1:0.05:10000
+x = 1.:0.05:10000
 
 # Evaluated model
 y = f(x, params...);
@@ -45,6 +45,48 @@ addexpr!(model, :((comp1 .+ comp2) .* comp3))
 result = fit!(model, data)
 
 
+p = DataFitting.probe([data], nstep=(10, 30),
+                      ( model.comp1.p[1],
+                        result.comp1.p[1].unc*1.3),
+                      ( model.comp2.p[2],
+                        result.comp2.p[2].unc*3))
+@gsp p[:,1] p[:,2] p[:,3].-=minimum(p[:,3]) "w p lc palette"
+
+@gsp "set contour" :-
+@gsp :- "set dgrid3d 30,10" :-
+@gsp :- "set cntrparam lev incremental 0, 1, 10" :-
+@gsp :- p[:,1] p[:,2] p[:,3].-=minimum(p[:,3]) "w l lc palette"
+
+
+p = DataFitting.probe([data],
+                      ( model.comp1.p[1],
+                       result.comp1.p[1].unc*3),
+                      ( model.comp2.p[2],
+                       result.comp2.p[2].unc*3),  
+                      ( model.comp1.p[2], 
+                       result.comp1.p[2].unc*3))
+c = p[:,4].-minimum(p[:,4])
+
+
+
+@gsp @sprintf("set cbrange [%f:%f]", extrema(c)...) :-
+@gsp :- xr=extrema(p[:,1]) yr=extrema(p[:,2]) zr=extrema(p[:,3]) :-
+last = 0.
+for i in 0.:1.25:maximum(c)
+    j = findall(last .< c .<= i)
+    global last = i
+    if length(j) > 1
+        @gsp :- p[j,1] p[j,2] p[j,3] c[j] " u 1:2:3:(1./\$4):4 w p notit pt 1 ps var lc palette"
+        sleep(0.05)
+    end
+end
+
+
+
+
+
+
+
 
 noise = randn(rng, length(x));
 data2 = Measures(1.3 * (y + noise), 1.3)
@@ -65,7 +107,7 @@ test_component(FuncWrap(f, params...), x; iter=1000)
     dummy = f(x, params...)
 end
 
-@eval DataFitting @code_ndim 3
+@eval DataFitting @code_ndim 4
 
 # 1D
 dom = Domain(5)
@@ -122,12 +164,10 @@ model.comp1.p[1].high = +Inf
 
 model.comp1.p[2].expr = "2 * comp1_p1"
 model.comp1.p[2].fixed = true
-recompile!(model)
 result = fit!(model, data)
 
 model.comp1.p[2].expr = "comp1_p1 + comp1_p2"
 model.comp1.p[2].fixed = false
-recompile!(model)
 result = fit!(model, data)
 
 

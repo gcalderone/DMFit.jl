@@ -6,7 +6,7 @@
 # Model
 #
 function getparams(model::Model)
-    out = OrderedDict{Symbol, WParameter}()
+    out = OrderedDict{Symbol, Parameter}()
     for (cname, comp) in model.comp
         for (pname, par) in getparams(comp, model.enabled[cname])
             out[Symbol(cname, compsep, pname)] = par
@@ -15,12 +15,12 @@ function getparams(model::Model)
     return out
 end
 
-getparamvalues(v::Union{Model, AbstractComponent}) = [wpar.par.val for (pname, wpar) in getparams(v)]
+getparamvalues(v::Union{Model, AbstractComponent}) = [par.val for (pname, par) in getparams(v)]
 function setparamvalues!(v::Union{Model, AbstractComponent}, pval::Vector{Float64})
     i = 0
-    for (pname, wpar) in getparams(v)
+    for (pname, par) in getparams(v)
         i += 1
-        wpar.par.val = pval[i]
+        par.val = pval[i]
     end
 end
 
@@ -35,6 +35,7 @@ function prepareindex1D!(model::Model)
         end
     end
     model.index1d = out
+    model.buffer1d = Vector{Float64}(undef, model.index1d[end])
 end
 
 
@@ -64,7 +65,7 @@ end
 # Components
 #
 function getparams(comp::AbstractComponent, enabled::Bool=true)
-    out = OrderedDict{Symbol, WParameter}()
+    out = OrderedDict{Symbol, Parameter}()
     for pname in fieldnames(typeof(comp))
         par = getfield(comp, pname)
         if typeof(par) == Parameter
@@ -74,11 +75,15 @@ function getparams(comp::AbstractComponent, enabled::Bool=true)
                 par.low  = log10(par.low)
                 par.high = log10(par.high)
             end
-            out[pname] = WParameter(pname, 0, par)
+            par._private.pname = pname
+            par._private.index = 0
+            out[pname] = par
         elseif typeof(par) == Vector{Parameter}
             for i in 1:length(par)
                 (enabled)  ||  (par[i].fixed = true)
-                out[Symbol(pname, i)] = WParameter(pname, i, par[i])
+                par[i]._private.pname = pname
+                par[i]._private.index = i
+                out[Symbol(pname, i)] = par[i]
             end
         end
     end
@@ -135,7 +140,7 @@ function Instrument(domain::AbstractDomain, model::Model,
     code = Vector{String}()
     tmp = ""
     for (cname, comp) in model.comp
-        for (pname, wpar) in getparams(comp)
+        for (pname, par) in getparams(comp)
             tmp *= ", $(cname)$(compsep)$(pname)::Float64"
         end
     end
@@ -148,8 +153,7 @@ function Instrument(domain::AbstractDomain, model::Model,
         if cname in compinvolved
             i = findall(cname .== compinvolved)[1]
             tmp = ""
-            for (pname, wpar) in getparams(comp)
-                par = wpar.par
+            for (pname, par) in getparams(comp)
                 (par.expr != "")  &&  (push!(code, "  $(cname)$(compsep)$(pname) = " *
                                              replace(par.expr, "this$(compsep)" => "$(cname)$(compsep)")))
                 tmp *= ", $(cname)$(compsep)$(pname)"
@@ -227,6 +231,12 @@ function _recompile!(model::Model, id::Int)
     prepareindex1D!(model)
 end
 
+function recompile!(model::Model)
+    for id in 1:length(model.instruments)
+        _recompile!(model, id)
+    end
+end
+
 # ____________________________________________________________________
 # Expressions
 #
@@ -293,7 +303,7 @@ function _evaluate!(model::Model)
             comp = model.comp[instr.compnames[ii]]
             jj = 1
             for (pname, par) in getparams(comp)
-                instr.compevals[ii].log[jj] = par.par.log
+                instr.compevals[ii].log[jj] = par.log
             end
         end
     end
@@ -311,25 +321,41 @@ function pvalues2FitComp(model::Model, pvalues::Vector{Float64}, uncert::Vector{
         fitcomp = OrderedDict{Symbol, Union{FitParam, Vector{FitParam}}}()
         accum = Vector{FitParam}()
         lastpname = :-
-        for (pname, wpar) in getparams(comp)
-            if (wpar.index == 0)  &&  (length(accum) > 0)
+        for (pname, par) in getparams(comp)
+            if (par._private.index == 0)  &&  (length(accum) > 0)
                 fitcomp[lastpname] = deepcopy(accum)
                 empty!(accum)
             end
 
             ii += 1
-            wpar.par.val = pvalues[ii] # Update model parameter values
-            if wpar.index == 0
+            par.val = pvalues[ii] # Update model parameter values
+            if par._private.index == 0
                 fitcomp[pname] = FitParam(pvalues[ii], uncert[ii])
             else
                 push!(accum, FitParam(pvalues[ii], uncert[ii]))
-                lastpname = wpar.pname
+                lastpname = par._private.pname
             end
         end
         (length(accum) > 0)  &&  (fitcomp[lastpname] = deepcopy(accum))
         bestfit[cname] = FitComp(fitcomp)
     end
     return bestfit
+end
+
+
+function residuals1d(model::Model, data1d::Vector{Measures_1D}) where T<:AbstractMeasures
+    ii = 1
+    for id in 1:length(model.instruments)
+        for jj in 1:length(model.instruments[id].exprnames)
+            (model.instruments[id].exprcmp[jj])  ||  (continue)
+            i1 = model.index1d[ii]+1
+            i2 = model.index1d[ii+1]
+            model.buffer1d[i1:i2] .=
+                ((data1d[ii].val .- model.instruments[id].exprevals[jj]) ./ data1d[ii].unc)
+            ii += 1
+        end
+    end
+    return model.buffer1d
 end
 
 
@@ -347,49 +373,37 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) 
 
     @assert typeof(minimizer) <: AbstractMinimizer
     @assert length(model.instruments) >= 1
-    params = getfield.(values(getparams(model)), :par)
+    params = collect(values(getparams(model)))
     pvalues = getfield.(params, :val)
     uncert = fill(NaN, length(pvalues))
     ifree = findall(.! getfield.(params, :fixed))
     @assert length(ifree) > 0 "No free parameter in the model"
 
-    # Prepare 1D arrays for residuals
-    buffer = Vector{Float64}(undef, model.index1d[end])
-    Rbuffer = Ref(buffer)
-    data1d = data1D(model, data)
-
     # Inner function to evaluate all the models and store the result in a 1D array
-    function func_residuals1d(freepvalues::Vector{Float64},
+    data1d = data1D(model, data)
+    function eval_residuals1d(freepvalues::Vector{Float64},
                               model=model, pvalues=pvalues, ifree=ifree, data1d=data1d)
-        buffer = Rbuffer[]
         pvalues[ifree] .= freepvalues
         _evaluate!(model, pvalues)
-        ii = 1
-        for id in 1:length(model.instruments)
-            for jj in 1:length(model.instruments[id].exprnames)
-                (model.instruments[id].exprcmp[jj])  ||  (continue)
-                buffer[model.index1d[ii]+1:model.index1d[ii+1]] .=
-                    ((data1d[ii].val .- model.instruments[id].exprevals[jj]) ./ data1d[ii].unc)
-                ii += 1
-            end
-        end
-        return buffer
+        return residuals1d(model, data1d)
     end
-    func_residuals1d(getfield.(params[ifree], :val))
-    #Main.code_warntype(func_residuals1d, (Vector{Float64},))
+    eval_residuals1d(getfield.(params[ifree], :val))
+    #Main.code_warntype(eval_residuals1d, (Vector{Float64},))
 
     status = :NonOptimal
     if !dry
-        (status, bestfit_val, bestfit_unc) = minimize(minimizer, func_residuals1d, params[ifree])
+        (status, bestfit_val, bestfit_unc) = minimize(minimizer, eval_residuals1d, params[ifree])
         @assert length(bestfit_val) == length(ifree)
         pvalues[ifree] .= bestfit_val
         uncert[ifree] .= bestfit_unc
     end
 
+    cost = sum(abs2, model.buffer1d)
+    dof = length(model.buffer1d) - length(ifree)
     result = FitResult(pvalues2FitComp(model, pvalues, uncert),
-                       length(buffer), length(buffer) - length(ifree),
-                       sum(abs2, buffer),
-                       status, float(Base.time_ns() - elapsedTime) / 1.e9)
+                       length(model.buffer1d), dof,
+                       cost, status, logccdf(Chisq(dof), cost) * log10(exp(1)),
+                       float(Base.time_ns() - elapsedTime) / 1.e9)
     return Wrap{FitResult}(result)
 end
 

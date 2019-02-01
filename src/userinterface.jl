@@ -59,7 +59,11 @@ setparamvalues!(w::Wrap{Model}, pval::Vector{Float64}) = setparamvalues!(wrappee
 function addcomp!(w::Wrap{Model}, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
     model = wrappee(w)
     for c in args
-        model.comp[c[1]] = c[2]
+        model.comp[c[1]] = deepcopy(c[2])
+        for (pname, param) in getparams(model.comp[c[1]])
+            param._private.model = model
+            param._private.cname = c[1]
+        end
         model.enabled[c[1]] = true
     end
     return w
@@ -69,6 +73,29 @@ function setfixed!(w::Wrap{Model}, s::Symbol, flag::Bool=true)
     model = wrappee(w)
     model.enabled[s] = !flag
     return w
+end
+
+# ____________________________________________________________________
+# Model domains
+#
+function propertynames(p::Parameter)
+    out = collect(fieldnames(Parameter))
+    out = out[findall(out .!= :_private)]
+end
+
+function setproperty!(p::Parameter, s::Symbol, value)
+    bkp = p.expr
+    setfield!(p, s, convert(typeof(getfield(p, s)), value))
+    if (s == :expr)  &&  (p._private.model != nothing)
+        try
+            recompile!(p._private.model)
+        catch err
+            show(err)
+            setfield!(p, s, bkp)
+            recompile!(p._private.model)
+        end
+    end
+    return value
 end
 
 
@@ -90,15 +117,6 @@ end
 rm_dom!(w::Wrap{Model}, id::Int) = deleteat!(wrappee(w).instruments, id)
 
 dom_count(w::Wrap{Model}) = length(wrappee(w).instruments)
-
-recompile!(w::Wrap{Model}, id::Int) = _recompile(wrappee(w), id)
-
-function recompile!(w::Wrap{Model})
-    model = wrappee(w)
-    for id in 1:length(model.instruments)
-        _recompile!(model, id)
-    end
-end
 
 
 # ____________________________________________________________________
@@ -187,3 +205,61 @@ test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1)
 
 
 code(w::Wrap{Instrument}) = println(wrappee(w).code)
+
+
+probe(data::AbstractMeasures, args...) = probe([data], args...)
+
+function probe(data::Vector{T}, args::Vararg{Tuple{Parameter, Number},N}; nstep=20) where {T<:AbstractMeasures, N}
+    for arg in args
+        @assert arg[1]._private.model == args[1][1]._private.model
+    end
+    model = args[1][1]._private.model
+    @assert model != nothing
+    @assert length(model.instruments) >= 1
+    params = collect(values(getparams(model)))
+    pvalues = getfield.(params, :val)
+
+    if isa(nstep, Int)
+        cd = CartesianDomain(fill(nstep, N)...)
+    else
+        cd = CartesianDomain(nstep...)
+    end
+    @assert length(size(cd)) == N
+
+    ipar = Vector{Int}()
+    step = Vector{Float64}()
+    for arg in args
+        for ii in 1:length(params)
+            if params[ii] == arg[1]
+                push!(ipar, ii)
+                push!(step, 2 * arg[2])
+                break
+            end
+        end
+    end
+    @assert length(ipar) == N
+    
+    for ii in 1:N
+        cd[ii] .-= length(cd[ii])/2. .+ 0.5
+        cd[ii] .*= step[ii] / (length(cd[ii])-1)
+        cd[ii] .+= params[ipar[ii]].val
+    end
+    dom = flatten(cd)
+
+    # Inner function to evaluate all the models and store the result in a 1D array
+    data1d = data1D(model, data)
+    function eval_residuals1d(pvalues::Vector{Float64},
+                              model=model, data1d=data1d)
+        _evaluate!(model, pvalues)
+        return residuals1d(model, data1d)
+    end
+
+    out = Matrix{Float64}(undef, length(dom), N+1)
+    for ii in 1:length(dom)
+        pvalues[ipar] .= dom.axis[:,ii]
+        eval_residuals1d(pvalues)
+        out[ii, 1:N] .= dom.axis[:,ii]
+        out[ii, N+1] = sum(abs2, model.buffer1d)
+    end
+    return out
+end

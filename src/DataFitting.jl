@@ -4,7 +4,7 @@
 module DataFitting
 
 using Printf
-using Statistics
+using Statistics, Distributions
 using DataStructures
 
 import Base.show
@@ -14,13 +14,14 @@ import Base.length
 import Base.getindex
 import Base.propertynames
 import Base.getproperty
+import Base.setproperty!
 import Base.append!
 
 export Domain, CartesianDomain, Measures,
     FuncWrap, ScalarParam, Smooth,
     Model, getparamvalues, setparamvalues!,
     addcomp!, setfixed!,
-    add_dom!, rm_dom!, dom_count, recompile!,
+    add_dom!, rm_dom!, dom_count,
     addexpr!, replaceexpr!, setflag!,
     evaluate!, fit!, fit,
     test_component

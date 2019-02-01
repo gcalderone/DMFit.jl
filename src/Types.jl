@@ -171,6 +171,7 @@ end
 
 @code_ndim 1
 @code_ndim 2
+@code_ndim 3
 
 getaxismin(dom::AbstractLinearDomain, dim::Int) = dom.vmin[dim]
 getaxismax(dom::AbstractLinearDomain, dim::Int) = dom.vmax[dim]
@@ -208,29 +209,6 @@ flatten(data::AbstractCounts  , dom::AbstractCartesianDomain)::Counts_1D   = Cou
 #     out[dom.index] .= array
 #     return out
 # end
-
-
-# ____________________________________________________________________
-# Parameter
-#
-mutable struct Parameter
-    val::Float64
-    low::Float64              # lower limit value
-    high::Float64             # upper limit value
-    step::Float64
-    fixed::Bool               # true = fixed; false = free
-    log::Bool
-    expr::String
-    Parameter(value::Number) = new(float(value), -Inf, +Inf, NaN, false, false, "")
-end
-
-# Wrapper for Parameter: it allows to distinguish a scalar parameter
-# (`index` = 0) from a vector of parameters
-mutable struct WParameter
-    pname::Symbol
-    index::Int
-    par::Parameter
-end
 
 
 # ____________________________________________________________________
@@ -272,10 +250,36 @@ mutable struct Model
     enabled::OrderedDict{Symbol, Bool}
     instruments::Vector{Instrument}
     index1d::Vector{Int}
+    buffer1d::Vector{Float64}
     Model(::Nothing) = new(OrderedDict{Symbol, AbstractComponent}(),
                            OrderedDict{Symbol, Bool}(),
                            Vector{Instrument}(),
-                           Vector{Int}())
+                           Vector{Int}(), Vector{Float64}())
+end
+
+
+# ____________________________________________________________________
+# ParameterPrivate: it allows to distinguish a scalar parameter
+# (`index` = 0) from a vector of parameters and to access parent Model
+mutable struct ParameterPrivate
+    model::Union{Nothing,Model}
+    cname::Symbol
+    pname::Symbol
+    index::Int
+    ParameterPrivate() = new(nothing, :-, :-, 0)
+end
+
+# Parameter
+mutable struct Parameter
+    _private::ParameterPrivate
+    val::Float64
+    low::Float64              # lower limit value
+    high::Float64             # upper limit value
+    step::Float64
+    fixed::Bool               # true = fixed; false = free
+    log::Bool
+    expr::String
+    Parameter(value::Number) = new(ParameterPrivate(), float(value), -Inf, +Inf, NaN, false, false, "")
 end
 
 
@@ -297,5 +301,6 @@ struct FitResult
     dof::Int
     cost::Float64
     status::Symbol      #:Optimal, :NonOptimal, :Warn, :Error
+    log10testprob::Float64
     elapsed::Float64
 end
