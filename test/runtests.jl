@@ -46,10 +46,10 @@ result = fit!(model, data)
 
 
 
-p = probe([model.comp1.p[1]], [data])
+p = probe(model.comp1.p[1], data)
 @gp p[:,1] p[:,2] "w l notit"
 
-p = probe([model.comp1.p[1], model.comp2.p[2]], [data])
+p = probe([model.comp1.p[1], model.comp2.p[2]], data)
 @gsp p[:,1] p[:,2] p[:,3] "w p lc palette"
 
 @gsp "set contour" :-
@@ -58,7 +58,7 @@ p = probe([model.comp1.p[1], model.comp2.p[2]], [data])
 @gsp :- p[:,1] p[:,2] p[:,3] "w l notit lc palette"
 
 
-p = DataFitting.probe([model.comp1.p[1], model.comp2.p[2], model.comp1.p[2]], [data])
+p = DataFitting.probe([model.comp1.p[1], model.comp2.p[2], model.comp1.p[2]], data)
 c = p[:,4]
 c ./= maximum(c)
 c = c .^ 0.5

@@ -208,6 +208,10 @@ code(w::Wrap{Instrument}) = println(wrappee(w).code)
 
 
 
+probe(lparams::Parameter, data::AbstractMeasures; kw...) = probe([lparams], [data]; kw...)
+probe(lparams::Vector{Parameter}, data::AbstractMeasures; kw...) = probe(lparams, [data]; kw...)
+probe(lparams::Parameter, data::Vector{T}; kw...) where T <: AbstractMeasures = probe([lparams], data; kw...)
+
 function probe(lparams::Vector{Parameter}, data::Vector{T}; delta=3., kw...) where T <: AbstractMeasures
     (length(lparams) == 0)  &&  (return nothing)
     (length(data) == 0)  &&  (return nothing)
@@ -267,6 +271,9 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}; delta=3., kw...) whe
 end
 
 
+probe(lparams::Parameter, data::AbstractMeasures, rr::Matrix{Float64}; kw...) = probe([lparams], [data], rr; kw...)
+probe(lparams::Vector{Parameter}, data::AbstractMeasures, rr::Matrix{Float64}; kw...) = probe(lparams, [data], rr; kw...)
+probe(lparams::Parameter, data::Vector{T}, rr::Matrix{Float64}; kw...) where T <: AbstractMeasures = probe([lparams], data, rr; kw...)
 
 function probe(lparams::Vector{Parameter}, data::Vector{T}, rr::Matrix{Float64}; nstep=11) where {T<:AbstractMeasures}
     (length(lparams) == 0)  &&  (return nothing)
