@@ -305,24 +305,30 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}, rr::Matrix{Float64};
     _evaluate!(model, pvalues0)
     cost0 = sum(abs2, residuals1d(model, data1d))
    
-    tmp = Vector{AbstractArray}()
+    ranges = Vector{AbstractArray}()
+    lnstep = nstep
+    if (length(nstep) == 1)  &&  (length(lparams) > 1)
+        lnstep = fill(nstep[1], length(lparams))
+    end
+    @assert length(lnstep) == length(lparams)
     ipar = Vector{Int}()
     for par in lparams
         for ii in 1:length(params)
             if params[ii] == par
                 push!(ipar, ii)
-                push!(tmp, range(rr[length(ipar), 1], stop=rr[length(ipar), 2], length=nstep))
+                push!(ranges, range(rr[length(ipar), 1], stop=rr[length(ipar), 2],
+                                    length=lnstep[length(ipar)]))
             end
         end
     end
     @assert length(ipar) == length(lparams)
-
     if length(lparams) > 1
-        cd = CartesianDomain(tmp...)
+        cd = CartesianDomain(ranges...)
     else
-        cd = Domain(tmp...)
+        cd = Domain(ranges...)
     end
     dom = flatten(cd)
+
     out = Matrix{Float64}(undef, length(dom), length(lparams)+1)
     for ii in 1:length(dom)
         if length(lparams) > 1
