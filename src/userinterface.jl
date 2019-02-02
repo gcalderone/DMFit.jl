@@ -53,6 +53,18 @@ end
 getparamvalues(w::Wrap{Model}) = getparamvalues(wrappee(w))
 setparamvalues!(w::Wrap{Model}, pval::Vector{Float64}) = setparamvalues!(wrappee(w), pval)
 
+function resetcounters!(w::Wrap{Model})
+    model = wrappee(w)
+    for instr in model.instruments
+        instr.counter = 0
+        for ce in instr.compevals
+            ce.counter = 0
+        end
+    end
+    return w
+end
+
+
 # ____________________________________________________________________
 # Components
 #

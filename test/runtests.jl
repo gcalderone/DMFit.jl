@@ -27,6 +27,11 @@ model.comp1.p[2].val = 1.e-3
 
 result = fit!(model, data)
 
+using CMPFit
+DataFitting.@enable_CMPFit
+
+result = fit!(model, data, minimizer=cmpfit())
+
 
 addcomp!(model, :ss => DataFitting.Smooth(2))
 addexpr!(model, 1, :(ss(comp1)))

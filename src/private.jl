@@ -370,7 +370,7 @@ function _fit(model::Model, data::Vector{T}; kw...) where T<:AbstractMeasures
 end
 
 
-function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=Minimizer()) where T<:AbstractMeasures
+function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=lsqfit()) where T<:AbstractMeasures
     elapsedTime = Base.time_ns()
 
     @assert typeof(minimizer) <: AbstractMinimizer
@@ -412,10 +412,10 @@ end
 
 # ====================================================================
 using LsqFit
-mutable struct Minimizer <: AbstractMinimizer
+mutable struct lsqfit <: AbstractMinimizer
 end
 
-function minimize(minimizer::Minimizer, func::Function, params::Vector{Parameter})
+function minimize(minimizer::lsqfit, func::Function, params::Vector{Parameter})
     ndata = length(func(getfield.(params, :val)))
     bestfit = LsqFit.curve_fit((dummy, pvalues) -> func(pvalues),
                                1.:ndata, fill(0., ndata),
@@ -426,4 +426,33 @@ function minimize(minimizer::Minimizer, func::Function, params::Vector{Parameter
     (bestfit.converged)  &&  (status = :Optimal)
     error = LsqFit.margin_error(bestfit, 0.6827)
     return (status, getfield.(Ref(bestfit), :param), error)
+end
+
+
+
+macro enable_CMPFit()
+    return esc(:(
+        import DataFitting.minimize;
+
+        mutable struct cmpfit <: DataFitting.AbstractMinimizer;
+        config::CMPFit.Config;
+        cmpfit() = new(CMPFit.Config());
+        end;
+
+        function minimize(minimizer::cmpfit, func::Function, params::Vector{DataFitting.Parameter});
+        guess = getfield.(params, :val);
+        low   = getfield.(params, :low);
+        high  = getfield.(params, :high);
+        parinfo = CMPFit.Parinfo(length(guess));
+        for i in 1:length(guess);
+        llow  = isfinite(low[i])   ?  1  :  0;
+        lhigh = isfinite(high[i])  ?  1  :  0;
+        parinfo[i].limited = (llow, lhigh);
+        parinfo[i].limits  = (low[i], high[i]);
+        end;
+        bestfit = CMPFit.cmpfit((pvalues) -> func(pvalues),
+                                guess, parinfo=parinfo, config=minimizer.config);
+        return (:Optimal, getfield.(Ref(bestfit), :param), getfield.(Ref(bestfit), :perror));
+        end;
+    ))
 end
