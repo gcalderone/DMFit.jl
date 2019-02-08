@@ -243,19 +243,19 @@ end
 newexprlabel(model::Model, id::Int) = Symbol(:expr, length(model.instruments[id].exprs)+1)
 newexprlabel(model::Model, id::Int, n::Int) = Symbol.(Ref(:expr), length(model.instruments[id].exprs) .+ collect(1:n))
 
-_addexpr!(model::Model                                 , expr::Expr         ; cmp=true) = _addexpr!(model,  1, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
-_addexpr!(model::Model                                 , symbol::Symbol     ; cmp=true) = _addexpr!(model,  1, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
-_addexpr!(model::Model                                 , exprs::Vector{Expr}; cmp=true) = _addexpr!(model,  1,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
+addexpr!(model::Model                                 , expr::Expr         ; cmp=true) = addexpr!(model,  1, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
+addexpr!(model::Model                                 , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
+addexpr!(model::Model                                 , exprs::Vector{Expr}; cmp=true) = addexpr!(model,  1,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
 
-_addexpr!(model::Model, id::Int                        , expr::Expr         ; cmp=true) = _addexpr!(model, id, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
-_addexpr!(model::Model, id::Int                        , symbol::Symbol     ; cmp=true) = _addexpr!(model, id, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
-_addexpr!(model::Model, id::Int                        , exprs::Vector{Expr}; cmp=true) = _addexpr!(model, id,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
+addexpr!(model::Model, id::Int                        , expr::Expr         ; cmp=true) = addexpr!(model, id, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
+addexpr!(model::Model, id::Int                        , symbol::Symbol     ; cmp=true) = addexpr!(model, id, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
+addexpr!(model::Model, id::Int                        , exprs::Vector{Expr}; cmp=true) = addexpr!(model, id,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
 
-_addexpr!(model::Model,          label::Symbol         , expr::Expr         ; cmp=true) = _addexpr!(model,  1, [label]                               , [expr]       ; cmp=[cmp])
-_addexpr!(model::Model,          label::Symbol         , symbol::Symbol     ; cmp=true) = _addexpr!(model,  1, [label]                               , [:(+$symbol)]; cmp=[cmp])
-_addexpr!(model::Model,          labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=true) = _addexpr!(model,  1,  labels                               , exprs        ; cmp=fill(cmp, length(exprs)))
+addexpr!(model::Model,          label::Symbol         , expr::Expr         ; cmp=true) = addexpr!(model,  1, [label]                               , [expr]       ; cmp=[cmp])
+addexpr!(model::Model,          label::Symbol         , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [label]                               , [:(+$symbol)]; cmp=[cmp])
+addexpr!(model::Model,          labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=true) = addexpr!(model,  1,  labels                               , exprs        ; cmp=fill(cmp, length(exprs)))
 
-function _addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=Vector{Bool}())
+function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=Vector{Bool}())
     instr = model.instruments[id]
     append!(instr.exprnames, labels)
     append!(instr.exprs, exprs)
@@ -353,7 +353,7 @@ function residuals1d(model::Model, data1d::Vector{Measures_1D}) where T<:Abstrac
             i1 = model.index1d[ii]+1
             i2 = model.index1d[ii+1]
             model.buffer1d[i1:i2] .=
-                ((data1d[ii].val .- model.instruments[id].exprevals[jj]) ./ data1d[ii].unc)
+                ((model.instruments[id].exprevals[jj] .- data1d[ii].val) ./ data1d[ii].unc)
             ii += 1
         end
     end
@@ -398,6 +398,7 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=lsqfit()) whe
         @assert length(bestfit_val) == length(ifree)
         pvalues[ifree] .= bestfit_val
         uncert[ifree] .= bestfit_unc
+        eval_residuals1d(pvalues[ifree]) # Re-evaluate model to ensure best fit values are used
     end
 
     cost = sum(abs2, model.buffer1d)
@@ -406,7 +407,7 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=lsqfit()) whe
                        length(model.buffer1d), dof,
                        cost, status, logccdf(Chisq(dof), cost) * log10(exp(1)),
                        float(Base.time_ns() - elapsedTime) / 1.e9)
-    return Wrap{FitResult}(result)
+    return UI{FitResult}(result)
 end
 
 

@@ -5,34 +5,34 @@
 # ____________________________________________________________________
 # Wrapper for user interface
 #
-struct Wrap{T}
+struct UI{T}
     _w::T
 end
-wrappee(v::Wrap{T}) where T = getfield(v, :_w)
+wrappee(v::UI{T}) where T = getfield(v, :_w)
 
 
 # ____________________________________________________________________
 # Model
 #
-Model() = Wrap{Model}(Model(nothing))
+Model() = UI{Model}(Model(nothing))
 Model(args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N} =
     addcomp!(Model(), args...)
 
-propertynames(w::Wrap{Model}) = collect(keys(wrappee(w).comp))
+propertynames(w::UI{Model}) = collect(keys(wrappee(w).comp))
 
-getproperty(w::Wrap{Model}, s::Symbol) = get(wrappee(w).comp, s, nothing)
+getproperty(w::UI{Model}, s::Symbol) = get(wrappee(w).comp, s, nothing)
 
-function getindex(w::Wrap{Model}, id::Int=1)
+function getindex(w::UI{Model}, id::Int=1)
     model = wrappee(w)
     c = model.instruments
     @assert length(c) >= 1 "No domain in model"
     @assert 1 <= id <= length(c) "Invalid index (allowed range: 1 : " * string(length(c)) * ")"
-    return Wrap{Instrument}(c[id])
+    return UI{Instrument}(c[id])
 end
 
-propertynames(w::Wrap{Instrument}) = [:domain; wrappee(w).exprnames; wrappee(w).compnames]
+propertynames(w::UI{Instrument}) = [:domain; wrappee(w).exprnames; wrappee(w).compnames]
 
-function getproperty(w::Wrap{Instrument}, s::Symbol)
+function getproperty(w::UI{Instrument}, s::Symbol)
     instr = wrappee(w)
     if s == :domain
         ret = instr.domain
@@ -50,10 +50,10 @@ function getproperty(w::Wrap{Instrument}, s::Symbol)
     return nothing
 end
 
-getparamvalues(w::Wrap{Model}) = getparamvalues(wrappee(w))
-setparamvalues!(w::Wrap{Model}, pval::Vector{Float64}) = setparamvalues!(wrappee(w), pval)
+getparamvalues(w::UI{Model}) = getparamvalues(wrappee(w))
+setparamvalues!(w::UI{Model}, pval::Vector{Float64}) = setparamvalues!(wrappee(w), pval)
 
-function resetcounters!(w::Wrap{Model})
+function resetcounters!(w::UI{Model})
     model = wrappee(w)
     for instr in model.instruments
         instr.counter = 0
@@ -68,7 +68,8 @@ end
 # ____________________________________________________________________
 # Components
 #
-function addcomp!(w::Wrap{Model}, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
+
+function addcomp!(w::UI{Model}, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
     model = wrappee(w)
     for c in args
         model.comp[c[1]] = deepcopy(c[2])
@@ -81,7 +82,7 @@ function addcomp!(w::Wrap{Model}, args::Vararg{Pair{Symbol, T}, N}) where {T<:Ab
     return w
 end
 
-function setfixed!(w::Wrap{Model}, s::Symbol, flag::Bool=true)
+function setfixed!(w::UI{Model}, s::Symbol, flag::Bool=true)
     model = wrappee(w)
     model.enabled[s] = !flag
     return w
@@ -114,31 +115,38 @@ end
 # ____________________________________________________________________
 # Model domains
 #
-function add_dom!(w::Wrap{Model}, dom::AbstractDomain)
+function add_dom!(w::UI{Model}, dom::AbstractDomain)
     model = wrappee(w)
     push!(model.instruments, Instrument(flatten(dom)))
     return length(model.instruments)
 end
 
-function add_dom!(w::Wrap{Model}, args...)
+function add_dom!(w::UI{Model}, args...)
     model = wrappee(w)
     push!(model.instruments, Instrument(Domain(args...)))
     return length(model.instruments)
 end
 
-rm_dom!(w::Wrap{Model}, id::Int) = deleteat!(wrappee(w).instruments, id)
+rm_dom!(w::UI{Model}, id::Int) = deleteat!(wrappee(w).instruments, id)
 
-dom_count(w::Wrap{Model}) = length(wrappee(w).instruments)
+dom_count(w::UI{Model}) = length(wrappee(w).instruments)
 
 
 # ____________________________________________________________________
 # Expressions
 #
-addexpr!(w::Wrap{Model}, args...; kw...) = _addexpr!(wrappee(w), args...; kw...)
+addexpr!(w::UI{Model}, args...; kw...) = addexpr!(wrappee(w), args...; kw...)
 
-replaceexpr!(w::Wrap{Model}, label::Symbol, expr::Expr) = replaceexpr!(w::Wrap{Model}, 1, label, expr)
+replaceexpr!(w::UI{Model}, label::Symbol, expr::Expr) = replaceexpr!(w::UI{Model}, 1, label, expr)
 
-function replaceexpr!(w::Wrap{Model}, id::Int, label::Symbol, expr::Expr)
+function replaceexpr!(w::UI{Model}, expr::Expr)
+    model = wrappee(w)
+    @assert length(model.instruments[1].exprnames) == 1
+    label = model.instruments[1].exprnames[1]
+    return replaceexpr!(w, 1, label, expr)
+end
+
+function replaceexpr!(w::UI{Model}, id::Int, label::Symbol, expr::Expr)
     model = wrappee(w)
     ii = findall(label .== model.instruments[id].exprnames)
     @assert length(ii) == 1 "No expression labelled $label in domain $id"
@@ -146,8 +154,8 @@ function replaceexpr!(w::Wrap{Model}, id::Int, label::Symbol, expr::Expr)
     _recompile!(model, id)
 end
 
-setflag!(w::Wrap{Model}, label::Symbol, flag::Bool) = setflag!(w, 1, label, flag)
-function setflag!(w::Wrap{Model}, id::Int, label::Symbol, flag::Bool)
+setflag!(w::UI{Model}, label::Symbol, flag::Bool) = setflag!(w, 1, label, flag)
+function setflag!(w::UI{Model}, id::Int, label::Symbol, flag::Bool)
     model = wrappee(w)
     ii = findall(label .== model.instruments[id].exprnames)
     @assert length(ii) == 1 "No expression labelled $label in domain $id"
@@ -159,14 +167,14 @@ end
 # ____________________________________________________________________
 # Evaluate & fit
 #
-evaluate!(w::Wrap{Model}) = _evaluate!(wrappee(w))
+evaluate!(w::UI{Model}) = _evaluate!(wrappee(w))
 
-fit!(w::Wrap{Model}, data::AbstractData; kw...) = _fit!(wrappee(w), [data]; kw...)
-fit!(w::Wrap{Model}, data::Vector{T}; kw...) where T<:AbstractMeasures = _fit!(wrappee(w), data; kw...)
-fit(w::Wrap{Model}, data::AbstractData; kw...) = _fit(wrappee(w), [data]; kw...)
-fit(w::Wrap{Model}, data::Vector{T}; kw...) where T<:AbstractMeasures = _fit(wrappee(w), data; kw...)
+fit!(w::UI{Model}, data::AbstractData; kw...) = _fit!(wrappee(w), [data]; kw...)
+fit!(w::UI{Model}, data::Vector{T}; kw...) where T<:AbstractMeasures = _fit!(wrappee(w), data; kw...)
+fit(w::UI{Model}, data::AbstractData; kw...) = _fit(wrappee(w), [data]; kw...)
+fit(w::UI{Model}, data::Vector{T}; kw...) where T<:AbstractMeasures = _fit(wrappee(w), data; kw...)
 
-function propertynames(w::Wrap{FitResult})
+function propertynames(w::UI{FitResult})
     res = wrappee(w)
     out = collect(fieldnames(typeof(res)))
     out = out[findall((out .!= :bestfit)  .&
@@ -175,17 +183,17 @@ function propertynames(w::Wrap{FitResult})
     return out
 end
 
-function getproperty(w::Wrap{FitResult}, s::Symbol)
+function getproperty(w::UI{FitResult}, s::Symbol)
     res = wrappee(w)
     if s in fieldnames(typeof(res))
         return getfield(res, s)
     end
-    return Wrap{FitComp}(res.bestfit[s])
+    return UI{FitComp}(res.bestfit[s])
 end
 
-propertynames(w::Wrap{FitComp}) = collect(keys(wrappee(w).params))
+propertynames(w::UI{FitComp}) = collect(keys(wrappee(w).params))
 
-getproperty(w::Wrap{FitComp}, s::Symbol) = wrappee(w).params[s]
+getproperty(w::UI{FitComp}, s::Symbol) = wrappee(w).params[s]
 
 
 # ____________________________________________________________________
@@ -216,7 +224,7 @@ test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1)
     test_component(flatten(domain), comp, iter)
 
 
-code(w::Wrap{Instrument}) = println(wrappee(w).code)
+code(w::UI{Instrument}) = println(wrappee(w).code)
 
 
 

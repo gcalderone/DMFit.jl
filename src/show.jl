@@ -181,7 +181,7 @@ end
 function show(io::IO, data::AbstractData)
     printsub(io, typeof(data), "   length: ", (length(data.val)))
     printhead(io, @sprintf("%8s │ %10s │ %10s │ %10s │ %10s │ %10s",
-                           "", "Min", "Max", "Mean", "Median", "Stddev."))
+                           "", "Min", "Max", "Mean", "Median", "Std. dev."))
 
     nonFinite = Vector{String}()
     names = fieldnames(typeof(data))
@@ -242,7 +242,7 @@ end
 
 
 show(io::IO, mime::MIME"text/plain", model::Model) = show(io, model)
-show(io::IO, w::Wrap{Model}) = show(io, wrappee(w))
+show(io::IO, w::UI{Model}) = show(io, wrappee(w))
 function show(io::IO, model::Model)
     printmain(io, "Model components:")
     length(model.comp) != 0  || (return nothing)
@@ -284,13 +284,12 @@ function show(io::IO, model::Model)
 
     tmp = length(model.index1d) - 1
     (tmp < 0)  &&  (tmp = 0)
-    println(io)
     printmain(io, "Instrument(s): ", length(model.instruments),
               ".  Dataset(s) required for fitting: ", tmp, newline=false)
 end
 
 
-show(io::IO, w::Wrap{Instrument}) = show(io, wrappee(w))
+show(io::IO, w::UI{Instrument}) = show(io, wrappee(w))
 function show(io::IO, instr::Instrument)
     # Check max length of expressions
     exprmaxlength = 0
@@ -306,7 +305,6 @@ function show(io::IO, instr::Instrument)
     (availlength > exprmaxlength)  &&  (availlength = exprmaxlength)
     (availlength < 4)  &&  (availlength = 4) # Leave space for "Expr" header
 
-    printmain(io, "Domain ", newline=false)
     show(io, instr.domain)
     println(io)
 
@@ -365,7 +363,7 @@ end
 show(io::IO, par::FitParam) = println(io, par.val, " ± ", par.unc)
 
 
-show(io::IO, w::Wrap{FitComp}) = show(io, wrappee(w))
+show(io::IO, w::UI{FitComp}) = show(io, wrappee(w))
 function show(io::IO, comp::FitComp; header=true, cname="")
     if header
         printhead(io, @sprintf "%-15s │ %-10s │ %10s │ %10s │ %10s"  "Component" "Param." "Value" "Uncert." "Rel.unc.(%)")
@@ -393,7 +391,7 @@ function show(io::IO, comp::FitComp; header=true, cname="")
 end
 
 
-function show(io::IO, w::Wrap{FitResult})
+function show(io::IO, w::UI{FitResult})
     res = wrappee(w)
     printmain(io, "Best Fit results:")
 
@@ -405,13 +403,13 @@ function show(io::IO, w::Wrap{FitResult})
     printtail(io)
 
     println(io)
-    println(io, @sprintf("    #Data  : %10d              Cost: %10.5g", res.ndata, res.cost))
-    println(io, @sprintf("    #Param : %10d              Red.: %-10.4g", res.ndata-res.dof, res.cost / res.dof))
-    print(io, @sprintf("    DOF    : %10d              ", res.dof))
+    println(io, @sprintf("    #Data  : %10d              Cost : %-10.5g", res.ndata, res.cost))
+    println(io, @sprintf("    #Param : %10d              Red. : %-10.4g", res.ndata-res.dof, res.cost / res.dof))
+    print(  io, @sprintf("    DOF    : %10d              ", res.dof))
     if res.log10testprob < -3
-        println(io, @sprintf("Test: 10^%-10.4g", res.log10testprob))
+        println(io, @sprintf("Prob.: 10^%-10.4g", res.log10testprob))
     else
-        println(io, @sprintf("Test: %10.4g", 10^res.log10testprob))
+        println(io, @sprintf("Prob.: %10.4g", 10^res.log10testprob))
     end
     printstyled(io, "    Status :  ", bold=printbold())
     if res.status == :Optimal
