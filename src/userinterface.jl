@@ -30,26 +30,6 @@ function getindex(w::UI{Model}, id::Int=1)
     return UI{Instrument}(c[id])
 end
 
-propertynames(w::UI{Instrument}) = [:domain; wrappee(w).exprnames; wrappee(w).compnames]
-
-function getproperty(w::UI{Instrument}, s::Symbol)
-    instr = wrappee(w)
-    if s == :domain
-        ret = instr.domain
-        (ndims(ret) == 1)  &&  (return ret[1])
-        return ret
-    end
-    i = findall(s .== instr.compnames)
-    if length(i) == 1
-        return instr.compevals[i[1]].result
-    end
-    i = findall(s .== instr.exprnames)
-    if length(i) == 1
-        return instr.exprevals[i[1]]
-    end
-    return nothing
-end
-
 getparamvalues(w::UI{Model}) = getparamvalues(wrappee(w))
 setparamvalues!(w::UI{Model}, pval::Vector{Float64}) = setparamvalues!(wrappee(w), pval)
 
@@ -89,7 +69,7 @@ function setfixed!(w::UI{Model}, s::Symbol, flag::Bool=true)
 end
 
 # ____________________________________________________________________
-# Model domains
+# Parameter
 #
 function propertynames(p::Parameter)
     out = collect(fieldnames(Parameter))
@@ -113,8 +93,29 @@ end
 
 
 # ____________________________________________________________________
-# Model domains
+# Instruments/domains
 #
+
+propertynames(w::UI{Instrument}) = [:domain; wrappee(w).exprnames; wrappee(w).compnames]
+
+function getproperty(w::UI{Instrument}, s::Symbol)
+    instr = wrappee(w)
+    if s == :domain
+        ret = instr.domain
+        (ndims(ret) == 1)  &&  (return ret[1])
+        return ret
+    end
+    i = findall(s .== instr.compnames)
+    if length(i) == 1
+        return instr.compevals[i[1]].result
+    end
+    i = findall(s .== instr.exprnames)
+    if length(i) == 1
+        return instr.exprevals[i[1]]
+    end
+    return nothing
+end
+
 function add_dom!(w::UI{Model}, dom::AbstractDomain)
     model = wrappee(w)
     push!(model.instruments, Instrument(flatten(dom)))
