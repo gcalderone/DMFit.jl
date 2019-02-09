@@ -15,7 +15,7 @@ wrappee(v::UI{T}) where T = getfield(v, :_w)
 # Model
 #
 Model() = UI{Model}(Model(nothing))
-Model(args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N} =
+Model(args::Vararg{Pair, N}) where N =
     addcomp!(Model(), args...)
 
 propertynames(w::UI{Model}) = collect(keys(wrappee(w).comp))
@@ -62,9 +62,12 @@ function setproperty!(w::UI{WComponent}, s::Symbol, value)
 end
 
 
-function addcomp!(w::UI{Model}, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
+function addcomp!(w::UI{Model}, args::Vararg{Pair, N}) where N
     model = wrappee(w)
+
     for c in args
+        @assert typeof(c[1]) == Symbol
+        @assert typeof(c[2]) <: AbstractComponent
         @assert !(c[1] in keys(model.comp)) "Component $(c[1]) already exists"
     end
 
