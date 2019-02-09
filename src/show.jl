@@ -214,14 +214,16 @@ function show(io::IO, data::AbstractData)
 end
 
 
-function show(io::IO, comp::AbstractComponent; header=true, count=0)
+show(io::IO, w::UI{WComponent}) = show(io, wrappee(w))
+function show(io::IO, wcomp::WComponent; header=true, count=0)
+    comp = wcomp.comp
     (header)  &&  (printsub(io, typeof(comp)))
     if count == 0
         printhead(io, @sprintf "%-15s │ %-10s │ %-10s │ %-15s │ %-16s"  "Component" "Param." "Value" "Range" "Description")
     end
 
-    localcount = 0; lastcount = length(getparams(comp))
-    for (pname, param) in getparams(comp)
+    localcount = 0; lastcount = length(getparams(wcomp))
+    for (pname, param) in getparams(wcomp)
         localcount += 1
         range = (param.fixed  ?  "     FIXED"  :  @sprintf("%7.2g:%-7.2g", param.low, param.high))
         (param.log)  &&  (range = "L " * range)
@@ -249,24 +251,24 @@ function show(io::IO, model::Model)
 
     printhead(io, @sprintf "%-15s │ %1s | %-20s │ %-33s"  "Component" "F" "Type" "Description")
     count = 0
-    for (cname, comp) in model.comp
+    for (cname, wcomp) in model.comp
         count += 1
-        ctype = split(string(typeof(comp)), ".")
+        ctype = split(string(typeof(wcomp.comp)), ".")
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
 
         s = @sprintf("%-15s │ %1s | %-20s │ %-33s", string(cname),
-                     (model.enabled[cname]  ?  ""  :  "F"),
-                     ctype, left(description(comp), 33))
-        printrow(io, s, color=(model.enabled[cname]  ?  :default  :  printcolorsub()))
+                     (wcomp.fixed  ?  "F"  :  ""),
+                     ctype, left(description(wcomp.comp), 33))
+        printrow(io, s, color=(wcomp.fixed  ?  printcolorsub()  :  :default))
     end
     printtail(io)
     println(io)
 
     printsub(io, "Parameters:")
     count = 0
-    for (cname, comp) in model.comp
-        count = show(io, comp, count=count, header=false)
+    for (cname, wcomp) in model.comp
+        count = show(io, wcomp, count=count, header=false)
     end
     printtail(io)
 

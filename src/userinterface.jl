@@ -20,7 +20,7 @@ Model(args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N} =
 
 propertynames(w::UI{Model}) = collect(keys(wrappee(w).comp))
 
-getproperty(w::UI{Model}, s::Symbol) = get(wrappee(w).comp, s, nothing)
+getproperty(w::UI{Model}, s::Symbol) = UI{WComponent}(get(wrappee(w).comp, s, nothing))
 
 function getindex(w::UI{Model}, id::Int=1)
     model = wrappee(w)
@@ -48,32 +48,57 @@ end
 # ____________________________________________________________________
 # Components
 #
+propertynames(w::UI{WComponent}) = [:fixed, collect(fieldnames(typeof(wrappee(w).comp)))...]
+
+function getproperty(w::UI{WComponent}, s::Symbol)
+    (s == :fixed)  &&  (return wrappee(w).fixed)
+    return getfield(wrappee(w).comp, s)
+end
+
+function setproperty!(w::UI{WComponent}, s::Symbol, value)
+    @assert s == :fixed "Can't assign a value to $s"
+    wrappee(w).fixed = value
+    return value
+end
+
 
 function addcomp!(w::UI{Model}, args::Vararg{Pair{Symbol, T}, N}) where {T<:AbstractComponent, N}
     model = wrappee(w)
     for c in args
-        model.comp[c[1]] = deepcopy(c[2])
-        for (pname, param) in getparams(model.comp[c[1]])
-            param._private.model = model
-            param._private.cname = c[1]
+        @assert !(c[1] in keys(model.comp)) "Component $(c[1]) already exists"
+    end
+
+    for c in args
+        newcomp = deepcopy(c[2])
+        for pname in fieldnames(typeof(newcomp))
+            par = getfield(newcomp, pname)
+            if typeof(par) == Parameter
+                par._private.model = model
+                par._private.cname = c[1]
+                par._private.pname = pname
+                par._private.index = 0
+            elseif typeof(par) == Vector{Parameter}
+                for i in 1:length(par)
+                    par[i]._private.model = model
+                    par[i]._private.cname = c[1]
+                    par[i]._private.pname = pname
+                    par[i]._private.index = i
+                end
+            end
         end
-        model.enabled[c[1]] = true
+        model.comp[c[1]] = WComponent(c[1], newcomp, false)
     end
     return w
 end
 
-function setfixed!(w::UI{Model}, s::Symbol, flag::Bool=true)
-    model = wrappee(w)
-    model.enabled[s] = !flag
-    return w
-end
 
 # ____________________________________________________________________
 # Parameter
 #
 function propertynames(p::Parameter)
     out = collect(fieldnames(Parameter))
-    out = out[findall(out .!= :_private)]
+    out = out[findall((out .!= :_private)  &&
+                      (out .!= :cfixed))]
 end
 
 function setproperty!(p::Parameter, s::Symbol, value)
@@ -245,7 +270,7 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}; delta=3., kw...) whe
     params = collect(values(getparams(model)))
     pvalues0 = getfield.(params, :val)
     pvalues = deepcopy(pvalues0)
-    
+
     data1d = data1D(model, data)
     ipar = Vector{Int}()
     range = Vector{Float64}()
@@ -253,7 +278,7 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}; delta=3., kw...) whe
     cost0 = sum(abs2, residuals1d(model, data1d))
     for par in lparams
         for ii in 1:length(params)
-            if params[ii] == par
+            if isequal(params[ii], par)
                 push!(ipar, ii)
                 @assert isfinite(par._private.fitunc) "The model has not been fit: can't guess step for parameter"
                 pvalues = deepcopy(pvalues0)
@@ -307,13 +332,13 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}, rr::Matrix{Float64};
     @assert length(model.instruments) >= 1
     params = collect(values(getparams(model)))
     pvalues0 = getfield.(params, :val)
-    pvalues = deepcopy(pvalues0)   
+    pvalues = deepcopy(pvalues0)
     @assert size(rr)[1] == length(lparams)
 
     data1d = data1D(model, data)
     _evaluate!(model, pvalues0)
     cost0 = sum(abs2, residuals1d(model, data1d))
-   
+
     ranges = Vector{AbstractArray}()
     lnstep = nstep
     if (length(nstep) == 1)  &&  (length(lparams) > 1)
@@ -350,6 +375,6 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}, rr::Matrix{Float64};
         _evaluate!(model, pvalues)
         out[ii, end] = sum(abs2, residuals1d(model, data1d)) .- cost0
     end
-    _evaluate!(model, pvalues0)    
+    _evaluate!(model, pvalues0)
     return out
 end

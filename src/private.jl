@@ -7,8 +7,8 @@
 #
 function getparams(model::Model)
     out = OrderedDict{Symbol, Parameter}()
-    for (cname, comp) in model.comp
-        for (pname, par) in getparams(comp, model.enabled[cname])
+    for (cname, wcomp) in model.comp
+        for (pname, par) in getparams(wcomp)
             out[Symbol(cname, compsep, pname)] = par
         end
     end
@@ -62,33 +62,37 @@ end
 
 
 # ____________________________________________________________________
-# Components
+# Component
 #
-function getparams(comp::AbstractComponent, enabled::Bool=true)
+function getparams(wcomp::WComponent)
     out = OrderedDict{Symbol, Parameter}()
-    for pname in fieldnames(typeof(comp))
-        par = getfield(comp, pname)
+    for pname in fieldnames(typeof(wcomp.comp))
+        par = getfield(wcomp.comp, pname)
         if typeof(par) == Parameter
-            (enabled)  ||  (par.fixed = true)
+            par.cfixed = (par.fixed  ||  wcomp.fixed)
             if par.log
                 par.val  = log10(par.val)
                 par.low  = log10(par.low)
                 par.high = log10(par.high)
             end
-            par._private.pname = pname
-            par._private.index = 0
             out[pname] = par
         elseif typeof(par) == Vector{Parameter}
             for i in 1:length(par)
-                (enabled)  ||  (par[i].fixed = true)
-                par[i]._private.pname = pname
-                par[i]._private.index = i
+                par[i].cfixed = (par[i].fixed  ||  wcomp.fixed)
                 out[Symbol(pname, i)] = par[i]
             end
         end
     end
     return out
 end
+
+
+# ____________________________________________________________________
+# Parameter
+#
+isequal(a::Parameter, b::Parameter) = ((a._private.cname == b._private.cname)  &&
+                                       (a._private.pname == b._private.pname)  &&
+                                       (a._private.index == b._private.index))
 
 
 # ____________________________________________________________________
@@ -139,8 +143,8 @@ function Instrument(domain::AbstractDomain, model::Model,
     # Prepare the code for model evaluation
     code = Vector{String}()
     tmp = ""
-    for (cname, comp) in model.comp
-        for (pname, par) in getparams(comp)
+    for (cname, wcomp) in model.comp
+        for (pname, par) in getparams(wcomp)
             tmp *= ", $(cname)$(compsep)$(pname)::Float64"
         end
     end
@@ -149,16 +153,16 @@ function Instrument(domain::AbstractDomain, model::Model,
     # The last argument, _unused_, allows to push! further
     # components in the model after an expression has already been
     # prepared
-    for (cname, comp) in model.comp
+    for (cname, wcomp) in model.comp
         if cname in compinvolved
             i = findall(cname .== compinvolved)[1]
             tmp = ""
-            for (pname, par) in getparams(comp)
+            for (pname, par) in getparams(wcomp)
                 (par.expr != "")  &&  (push!(code, "  $(cname)$(compsep)$(pname) = " *
                                              replace(par.expr, "this$(compsep)" => "$(cname)$(compsep)")))
                 tmp *= ", $(cname)$(compsep)$(pname)"
             end
-            if isfunction(comp)
+            if isfunction(wcomp.comp)
                 push!(code, "  $cname(args...) = _evaluate!(_instr.compevals[$i], domain $tmp, args...)")
             else
                 push!(code, "  $cname = _evaluate!(_instr.compevals[$i], domain $tmp)")
@@ -194,10 +198,10 @@ function Instrument(domain::AbstractDomain, model::Model,
     funct = eval(Meta.parse(join(code, "\n")))
 
     compevals = Vector{CompEvaluation}()
-    for (cname, comp) in model.comp
+    for (cname, wcomp) in model.comp
         if cname in compinvolved
-            cd = cdata(comp, domain)
-            npar = length(getparams(comp))
+            cd = cdata(wcomp.comp, domain)
+            npar = length(getparams(wcomp))
             tmp = CompEvaluation(true, npar, fill(false, npar), 0, cd,
                                  Vector{Float64}(undef, npar),
                                  Vector{Float64}(undef, outsize(cd, domain)))
@@ -267,7 +271,7 @@ end
 
 # ____________________________________________________________________
 function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
-    c.enabled  ||  (return c.result)
+    c.fixed  &&  (return c.result)
     if c.counter == 0
         c.counter += 1
         evaluate!(c.cdata, c.result, d, args...)
@@ -299,10 +303,10 @@ end
 function _evaluate!(model::Model)
     for instr in model.instruments
         for ii in 1:length(instr.compnames)
-            instr.compevals[ii].enabled = model.enabled[instr.compnames[ii]]
-            comp = model.comp[instr.compnames[ii]]
+            wcomp = model.comp[instr.compnames[ii]]
+            instr.compevals[ii].fixed = wcomp.fixed
             jj = 1
-            for (pname, par) in getparams(comp)
+            for (pname, par) in getparams(wcomp)
                 instr.compevals[ii].log[jj] = par.log
             end
         end
@@ -378,7 +382,7 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=lsqfit()) whe
     params = collect(values(getparams(model)))
     pvalues = getfield.(params, :val)
     uncert = fill(NaN, length(pvalues))
-    ifree = findall(.! getfield.(params, :fixed))
+    ifree = findall(.! getfield.(params, :cfixed))
     @assert length(ifree) > 0 "No free parameter in the model"
 
     # Inner function to evaluate all the models and store the result in a 1D array

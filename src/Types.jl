@@ -215,7 +215,7 @@ flatten(data::AbstractCounts  , dom::AbstractCartesianDomain)::Counts_1D   = Cou
 # Instrument
 #
 mutable struct CompEvaluation
-    enabled::Bool
+    fixed::Bool
     npar::Int
     log::Vector{Bool}
     counter::Int
@@ -243,16 +243,23 @@ end
 
 
 # ____________________________________________________________________
+# Wrapper for components
+#
+mutable struct WComponent
+    cname::Symbol
+    comp::AbstractComponent
+    fixed::Bool
+end
+
+# ____________________________________________________________________
 # Main Model structure
 #
 mutable struct Model
-    comp::OrderedDict{Symbol, AbstractComponent}
-    enabled::OrderedDict{Symbol, Bool}
+    comp::OrderedDict{Symbol, WComponent}
     instruments::Vector{Instrument}
     index1d::Vector{Int}
     buffer1d::Vector{Float64}
-    Model(::Nothing) = new(OrderedDict{Symbol, AbstractComponent}(),
-                           OrderedDict{Symbol, Bool}(),
+    Model(::Nothing) = new(OrderedDict{Symbol, WComponent}(),
                            Vector{Instrument}(),
                            Vector{Int}(), Vector{Float64}())
 end
@@ -279,9 +286,10 @@ mutable struct Parameter
     high::Float64             # upper limit value
     step::Float64
     fixed::Bool               # true = fixed; false = free
+    cfixed::Bool
     log::Bool
     expr::String
-    Parameter(value::Number) = new(ParameterPrivate(), float(value), -Inf, +Inf, NaN, false, false, "")
+    Parameter(value::Number) = new(ParameterPrivate(), float(value), -Inf, +Inf, NaN, false, false, false, "")
 end
 
 
