@@ -22,12 +22,38 @@ propertynames(w::UI{Model}) = collect(keys(wrappee(w).comp))
 
 getproperty(w::UI{Model}, s::Symbol) = UI{WComponent}(get(wrappee(w).comp, s, nothing))
 
-function getindex(w::UI{Model}, id::Int=1)
+# propertynames(w::UI{Instrument}) = [:domain; wrappee(w).exprnames; wrappee(w).compnames]
+function getindex(w::UI{Model}, id::Int, expr::Symbol)
     model = wrappee(w)
     c = model.instruments
     @assert length(c) >= 1 "No domain in model"
     @assert 1 <= id <= length(c) "Invalid index (allowed range: 1 : " * string(length(c)) * ")"
-    return UI{Instrument}(c[id])
+    instr = c[id]
+
+    if expr == :domain
+        ret = instr.domain
+        (ndims(ret) == 1)  &&  (return ret[1])
+        return ret
+    end
+    i = findall(expr .== instr.compnames)
+    if length(i) == 1
+        return instr.compevals[i[1]].result
+    end
+    i = findall(expr .== instr.exprnames)
+    if length(i) == 1
+        return instr.exprevals[i[1]]
+    end
+    error("No expression $expr available for instrument $id")
+end
+
+getindex(w::UI{Model}, expr::Symbol) = getindex(w, 1, expr)
+
+function getindex(w::UI{Model}, id::Int=1)
+    model = wrappee(w)
+    c = model.instruments[id]
+    i = findall(c.exprcmp)
+    @assert length(i) == 1 "No flagged expression for instrument $id"
+    return c.exprevals[i[1]]
 end
 
 getparamvalues(w::UI{Model}) = getparamvalues(wrappee(w))
@@ -124,25 +150,7 @@ end
 # Instruments/domains
 #
 
-propertynames(w::UI{Instrument}) = [:domain; wrappee(w).exprnames; wrappee(w).compnames]
 
-function getproperty(w::UI{Instrument}, s::Symbol)
-    instr = wrappee(w)
-    if s == :domain
-        ret = instr.domain
-        (ndims(ret) == 1)  &&  (return ret[1])
-        return ret
-    end
-    i = findall(s .== instr.compnames)
-    if length(i) == 1
-        return instr.compevals[i[1]].result
-    end
-    i = findall(s .== instr.exprnames)
-    if length(i) == 1
-        return instr.exprevals[i[1]]
-    end
-    return nothing
-end
 
 function add_dom!(w::UI{Model}, dom::AbstractDomain)
     model = wrappee(w)
@@ -253,7 +261,7 @@ test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1)
     test_component(flatten(domain), comp, iter)
 
 
-code(w::UI{Instrument}) = println(wrappee(w).code)
+# code(w::UI{Instrument}) = println(wrappee(w).code)
 
 
 

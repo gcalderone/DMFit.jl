@@ -25,12 +25,15 @@ addexpr!(model, 1, :comp1)
 model.comp1.p[1].val = 1
 model.comp1.p[2].val = 1.e-3
 
+setparamvalues!(model, params)
 result = fit!(model, data)
 
 using CMPFit
 DataFitting.@enable_CMPFit
-
+setparamvalues!(model, params)
 result = fit!(model, data, minimizer=cmpfit())
+
+
 
 
 addcomp!(model, :ss => DataFitting.Smooth(2))
