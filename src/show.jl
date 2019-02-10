@@ -301,7 +301,7 @@ function show(io::IO, instr::Instrument)
     end
     #Check available space to fill the terminal
     availlength = exprmaxlength
-    if (isa(io, IOContext))  &&  (displaysize(io)[2] >= 80)
+    if ((isa(io, Base.TTY)  ||  isa(io, IOContext))  &&  (displaysize(io)[2] >= 80))
         availlength = displaysize(io)[2]-76-length(ps.prefix)
     end
     (availlength > exprmaxlength)  &&  (availlength = exprmaxlength)

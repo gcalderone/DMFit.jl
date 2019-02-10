@@ -236,17 +236,16 @@ getproperty(w::UI{FitComp}, s::Symbol) = wrappee(w).params[s]
 # ____________________________________________________________________
 # Miscellaneous
 #
-function test_component(comp::AbstractComponent, args...; iter=1)
+function test_component(comp::AbstractComponent, args...; iter=10)
     model = Model(:test => comp)
     add_dom!(model, args...)
-    addexpr!(model, :(+test))
+    addexpr!(model, :test)
 
-    printstyled(color=:magenta, bold=true, "First evaluation:\n")
+    println("Warmup:")
     @time result = evaluate!(model)
-    if iter > 0
-        println()
-        printstyled(color=:magenta, bold=true, "Further evaluations ($iter):\n")
 
+    if iter > 0
+        println("Evaluating component $iter times:")
         @time begin
             for i in 1:iter
                 result = evaluate!(model)
@@ -254,11 +253,10 @@ function test_component(comp::AbstractComponent, args...; iter=1)
             end
         end
     end
-    show(model)
-    return nothing
+    return model
 end
-test_component(domain::AbstractCartesianDomain, comp::AbstractComponent, iter=1) =
-    test_component(flatten(domain), comp, iter)
+test_component(comp::AbstractComponent, domain::AbstractCartesianDomain, iter=1) =
+    test_component(comp, flatten(domain); iter=iter)
 
 
 # code(w::UI{Instrument}) = println(wrappee(w).code)
