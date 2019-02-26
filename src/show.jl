@@ -5,10 +5,10 @@
 mutable struct PrintSettings
     prefix::String
     head::String
-    rule::String
+    ruler::String
     tail::String
     width::Int
-    pendingrule::Bool
+    pendingruler::Bool
     plain::Bool
     colormain::Symbol
     colortable::Symbol
@@ -76,10 +76,10 @@ function printhead(io::IO, args...)
         ss[i] = join(fill("─", length(ss[i])))
     end
     ps.head = join(ss, "┬")
-    ps.rule = join(ss, "┼")
+    ps.ruler = join(ss, "┼")
     ps.tail = join(ss, "┴")
     ps.width = length(tmp)+1
-    ps.pendingrule = false
+    ps.pendingruler = false
 
     tmp = join(fill("─", ps.width))
     printstyled(io, color=printcolortable(), ps.prefix, "╭", ps.head, "╮\n", ps.prefix, "│")
@@ -90,21 +90,27 @@ end
 function printrow(io::IO, args...; color=:default, lastingroup=false, sub=false)
     global ps
     (ps.plain)  &&  (return println(io, args...))
-    if ps.pendingrule
+    if ps.pendingruler
         tmp = join(fill("─", ps.width))
         printstyled(io, color=printcolortable(), ps.prefix, "├")
-        print(io, ps.rule)
+        printstyled(io, ps.ruler, color=printcolorsub())
         printstyled(io, color=printcolortable(), "┤")
         println(io)
-        ps.pendingrule = false
+        ps.pendingruler = false
     end
-    ps.pendingrule = lastingroup
+    ps.pendingruler = lastingroup
 
     printstyled(io, color=printcolortable(), ps.prefix, "│")
     if sub
         printstyled(io, color=printcolorsub(), args...)
     else
-        printstyled(io, args..., color=color)#, color=(lastingroup ? :underline : :default))
+        for arg in args
+            ss = split(arg, "│")
+            for i in 1:length(ss)
+                printstyled(io, ss[i], color=color)
+                (i < length(ss))  &&  printstyled(io, "│", color=printcolorsub())
+            end
+        end
     end
     tmp = length(sprint(print, args...))+1
     if tmp <= ps.width
@@ -118,7 +124,7 @@ function printtail(io::IO)
     (ps.plain)  &&  (return nothing)
     tmp = join(fill("─", ps.width))
     printstyled(io, color=printcolortable(), ps.prefix, "╰", ps.tail, "╯\n")
-    ps.pendingrule = false
+    ps.pendingruler = false
 end
 
 function show(io::IO, dom::AbstractCartesianDomain)
@@ -233,10 +239,10 @@ function show(io::IO, wcomp::WComponent; header=true, count=0)
                      (param._private.index >= 1  ?  Symbol(param._private.pname, "[", param._private.index, "]")  :  pname),
                      param.val, range, left(description(comp, param._private.pname), 16))
         if param.expr != ""
-            printrow(io, s)
+            printrow(io, s, color=(param.fixed  ?  printcolorsub()  :  :default))
             printrow(io, @sprintf("%-15s    ⌊ %s", "", param.expr), lastingroup=(localcount == lastcount), sub=true)
         else
-            printrow(io, s, lastingroup=(localcount == lastcount))
+            printrow(io, s, color=(param.fixed  ?  printcolorsub()  :  :default), lastingroup=(localcount == lastcount))
         end
     end
     return count
@@ -249,7 +255,7 @@ function show(io::IO, model::Model)
     printmain(io, "Model components:")
     length(model.comp) != 0  || (return nothing)
 
-    printhead(io, @sprintf "%-15s │ %1s | %-20s │ %-33s"  "Component" "F" "Type" "Description")
+    printhead(io, @sprintf "%-15s │ %1s │ %-20s │ %-33s"  "Component" "F" "Type" "Description")
     count = 0
     for (cname, wcomp) in model.comp
         count += 1
@@ -257,7 +263,7 @@ function show(io::IO, model::Model)
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
 
-        s = @sprintf("%-15s │ %1s | %-20s │ %-33s", string(cname),
+        s = @sprintf("%-15s │ %1s │ %-20s │ %-33s", string(cname),
                      (wcomp.fixed  ?  "F"  :  ""),
                      ctype, left(description(wcomp.comp), 33))
         printrow(io, s, color=(wcomp.fixed  ?  printcolorsub()  :  :default))
@@ -291,7 +297,6 @@ function show(io::IO, model::Model)
 end
 
 
-show(io::IO, w::UI{Instrument}) = show(io, wrappee(w))
 function show(io::IO, instr::Instrument)
     # Check max length of expressions
     exprmaxlength = 0
@@ -378,7 +383,7 @@ function show(io::IO, comp::FitComp; header=true, cname="")
                 par = params[ii]
                 spname = string(pname) * "[" * string(ii) * "]"
                 printrow(io, lastingroup=((localcount == lastcount)  &&  (ii == length(params))),
-                         color=(isfinite(par.unc)  ?  :default  :  printcolorerr()),
+                         color=(isfinite(par.unc)  ?  :default  :  printcolorsub()),
                          @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
                                   spname, par.val, par.unc, par.unc/par.val*100.))
             end
@@ -387,7 +392,8 @@ function show(io::IO, comp::FitComp; header=true, cname="")
             spname = string(pname)
             s = @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
                          spname, par.val, par.unc, par.unc/par.val*100.)
-            printrow(io, s, lastingroup=(localcount == lastcount))
+            printrow(io, s, lastingroup=(localcount == lastcount),
+                     color=(isfinite(par.unc)  ?  :default  :  printcolorsub()))
         end
     end
 end

@@ -19,11 +19,13 @@ Model(args::Vararg{Pair, N}) where N =
     addcomp!(Model(), args...)
 
 propertynames(w::UI{Model}) = collect(keys(wrappee(w).comp))
-
 getproperty(w::UI{Model}, s::Symbol) = UI{WComponent}(get(wrappee(w).comp, s, nothing))
+getindex(w::UI{Model}, s::Symbol) = getproperty(w, s)
 
-# propertynames(w::UI{Instrument}) = [:domain; wrappee(w).exprnames; wrappee(w).compnames]
-function getindex(w::UI{Model}, id::Int, expr::Symbol)
+
+code(w::UI{Model}, id::Int=1) = println(wrappee(w).instruments[id].code)
+
+function (w::UI{Model})(id::Int, expr::Symbol)
     model = wrappee(w)
     c = model.instruments
     @assert length(c) >= 1 "No domain in model"
@@ -46,13 +48,13 @@ function getindex(w::UI{Model}, id::Int, expr::Symbol)
     error("No expression $expr available for instrument $id")
 end
 
-getindex(w::UI{Model}, expr::Symbol) = getindex(w, 1, expr)
+(w::UI{Model})(expr::Symbol) = w(1, expr)
 
-function getindex(w::UI{Model}, id::Int=1)
+function (w::UI{Model})(id::Int=1)
     model = wrappee(w)
     c = model.instruments[id]
     i = findall(c.exprcmp)
-    @assert length(i) == 1 "No flagged expression for instrument $id"
+    @assert length(i) == 1 "No unambiguous expression for instrument $id"
     return c.exprevals[i[1]]
 end
 
@@ -75,7 +77,8 @@ end
 # Components
 #
 propertynames(w::UI{WComponent}) = [:fixed, collect(fieldnames(typeof(wrappee(w).comp)))...]
-
+componenttype(w::UI{WComponent}) = typeof(wrappee(w).comp)
+    
 function getproperty(w::UI{WComponent}, s::Symbol)
     (s == :fixed)  &&  (return wrappee(w).fixed)
     return getfield(wrappee(w).comp, s)
@@ -178,8 +181,9 @@ replaceexpr!(w::UI{Model}, label::Symbol, expr::Expr) = replaceexpr!(w::UI{Model
 
 function replaceexpr!(w::UI{Model}, expr::Expr)
     model = wrappee(w)
-    @assert length(model.instruments[1].exprnames) == 1
-    label = model.instruments[1].exprnames[1]
+    i = findall(model.instruments[1].exprcmp)
+    @assert length(i) == 1
+    label = model.instruments[1].exprnames[i[1]]
     return replaceexpr!(w, 1, label, expr)
 end
 
@@ -189,6 +193,7 @@ function replaceexpr!(w::UI{Model}, id::Int, label::Symbol, expr::Expr)
     @assert length(ii) == 1 "No expression labelled $label in domain $id"
     model.instruments[id].exprs[ii[1]] = expr
     _recompile!(model, id)
+    return model
 end
 
 setflag!(w::UI{Model}, label::Symbol, flag::Bool) = setflag!(w, 1, label, flag)
@@ -197,7 +202,7 @@ function setflag!(w::UI{Model}, id::Int, label::Symbol, flag::Bool)
     ii = findall(label .== model.instruments[id].exprnames)
     @assert length(ii) == 1 "No expression labelled $label in domain $id"
     model.instruments[id].exprcmp[ii[1]] = flag
-    recompile!(w)
+    recompile!(model)
 end
 
 
@@ -257,10 +262,6 @@ function test_component(comp::AbstractComponent, args...; iter=10)
 end
 test_component(comp::AbstractComponent, domain::AbstractCartesianDomain, iter=1) =
     test_component(comp, flatten(domain); iter=iter)
-
-
-# code(w::UI{Instrument}) = println(wrappee(w).code)
-
 
 
 probe(lparams::Parameter, data::AbstractMeasures; kw...) = probe([lparams], [data]; kw...)

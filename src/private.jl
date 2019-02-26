@@ -104,7 +104,7 @@ Instrument(dom::AbstractDomain) =
                Vector{Symbol}(), Vector{CompEvaluation}(),
                Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}())
 
-function Instrument(domain::AbstractDomain, model::Model,
+function Instrument(model::Model, domain::AbstractDomain,
                     labels::Vector{Symbol}, exprs::Vector{Expr}, cmp::Vector{Bool})
     (length(cmp) == 0)  && (cmp = fill(true, length(exprs)))
     @assert length(labels) == length(exprs)
@@ -197,6 +197,15 @@ function Instrument(domain::AbstractDomain, model::Model,
     push!(code, "end")
     funct = eval(Meta.parse(join(code, "\n")))
 
+    compevals = CompEvals(model, domain, compinvolved)
+    
+    instr = Instrument(flatten(domain), domain, join(code, "\n"), funct, 0,
+                       compinvolved, compevals,
+                       deepcopy(labels), deepcopy(exprs), cmp, exprevals)
+    return instr
+end
+
+function CompEvals(model::Model, domain::AbstractDomain, compinvolved::Vector{Symbol})
     compevals = Vector{CompEvaluation}()
     for (cname, wcomp) in model.comp
         if cname in compinvolved
@@ -209,23 +218,12 @@ function Instrument(domain::AbstractDomain, model::Model,
             push!(compevals, tmp)
         end
     end
-
-    instr = Instrument(domain)
-    instr.code = join(code, "\n")
-    instr.funct = funct
-    instr.counter = 0
-    instr.compnames = compinvolved
-    instr.compevals = compevals
-    instr.exprnames = deepcopy(labels)
-    instr.exprs = deepcopy(exprs)
-    instr.exprcmp = cmp
-    instr.exprevals = exprevals
-    return instr
+    return compevals
 end
 
 # Recompile an instrument
 Instrument(model::Model, instr::Instrument) =
-    Instrument(instr.domain, model, instr.exprnames, instr.exprs, instr.exprcmp)
+    Instrument(model, instr.domain, instr.exprnames, instr.exprs, instr.exprcmp)
 
 function _recompile!(model::Model, id::Int)
     tmp = Instrument(model, model.instruments[id])
@@ -271,12 +269,11 @@ end
 
 # ____________________________________________________________________
 function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
-    c.fixed  &&  (return c.result)
     if c.counter == 0
         c.counter += 1
         evaluate!(c.cdata, c.result, d, args...)
     else
-        #evaluate!(c.cdata, c.result, d, args...)
+        c.fixed  &&  (return c.result)
         for i in 1:c.npar
             (c.log[i])  &&  (args[i] = 10. ^args[i])
             if c.lastParams[i] != args[i]
