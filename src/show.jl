@@ -14,9 +14,10 @@ mutable struct PrintSettings
     colortable::Symbol
     colorsub::Symbol
     colorerr::Symbol
+    showfixedpars::Bool
 end
 const ps = PrintSettings("", "", "", "", 0, false, false,
-                         :yellow, :light_blue, :light_black, :light_red)
+                         :yellow, :light_blue, :light_black, :light_red, false)
 
 function showplain(b::Bool=true)
     global ps
@@ -221,19 +222,19 @@ end
 
 
 show(io::IO, w::UI{WComponent}) = show(io, wrappee(w))
-function show(io::IO, wcomp::WComponent; header=true, count=0)
+function show(io::IO, wcomp::WComponent; header=true)
     comp = wcomp.comp
-    (header)  &&  (printsub(io, typeof(comp)))
-    if count == 0
+    if header
         printhead(io, @sprintf "%-15s │ %-10s │ %-10s │ %-15s │ %-16s"  "Component" "Param." "Value" "Range" "Description")
     end
 
     localcount = 0; lastcount = length(getparams(wcomp))
     for (pname, param) in getparams(wcomp)
+        global ps
         localcount += 1
+        (!ps.showfixedpars)  &&  (wcomp.fixed  ||  param.fixed)  &&  continue
         range = (param.fixed  ?  "     FIXED"  :  @sprintf("%7.2g:%-7.2g", param.low, param.high))
         (param.log)  &&  (range = "L " * range)
-        count += 1
         s = @sprintf("%-15s │ %-10s │ %10.4g │ %-15s │ %-16s",
                      param._private.cname,
                      (param._private.index >= 1  ?  Symbol(param._private.pname, "[", param._private.index, "]")  :  pname),
@@ -245,7 +246,7 @@ function show(io::IO, wcomp::WComponent; header=true, count=0)
             printrow(io, s, color=(param.fixed  ?  printcolorsub()  :  :default), lastingroup=(localcount == lastcount))
         end
     end
-    return count
+    return nothing
 end
 
 
@@ -256,9 +257,7 @@ function show(io::IO, model::Model)
     length(model.comp) != 0  || (return nothing)
 
     printhead(io, @sprintf "%-15s │ %1s │ %-20s │ %-33s"  "Component" "F" "Type" "Description")
-    count = 0
     for (cname, wcomp) in model.comp
-        count += 1
         ctype = split(string(typeof(wcomp.comp)), ".")
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
@@ -272,9 +271,10 @@ function show(io::IO, model::Model)
     println(io)
 
     printsub(io, "Parameters:")
-    count = 0
+    header = true
     for (cname, wcomp) in model.comp
-        count = show(io, wcomp, count=count, header=false)
+        show(io, wcomp, header=header)
+        header = false
     end
     printtail(io)
 
@@ -330,7 +330,7 @@ function show(io::IO, instr::Instrument)
         printrow(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ ",
                               "", cname, ceval.counter,
                               minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : "")),
-                 color=(nan+inf > 0  ?  printcolorerr()  :  :default),
+                 color=(nan+inf > 0  ?  printcolorerr()  :  (ceval.fixed  ?  printcolorsub()  :  :default)),
                  lastingroup=(jj==length(instr.compevals)))
     end
 
@@ -385,13 +385,13 @@ function show(io::IO, comp::FitComp; header=true, cname="")
                 printrow(io, lastingroup=((localcount == lastcount)  &&  (ii == length(params))),
                          color=(isfinite(par.unc)  ?  :default  :  printcolorsub()),
                          @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
-                                  spname, par.val, par.unc, par.unc/par.val*100.))
+                                  spname, par.val, par.unc, par.unc/abs(par.val)*100.))
             end
         else
             par = params
             spname = string(pname)
             s = @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
-                         spname, par.val, par.unc, par.unc/par.val*100.)
+                         spname, par.val, par.unc, par.unc/abs(par.val)*100.)
             printrow(io, s, lastingroup=(localcount == lastcount),
                      color=(isfinite(par.unc)  ?  :default  :  printcolorsub()))
         end

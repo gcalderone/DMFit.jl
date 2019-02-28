@@ -100,7 +100,7 @@ isequal(a::Parameter, b::Parameter) = ((a._private.cname == b._private.cname)  &
 #
 # Instrument constructors
 Instrument(dom::AbstractDomain) =
-    Instrument(flatten(dom), dom, "", ()->nothing, 0,
+    Instrument(false, flatten(dom), dom, "", ()->nothing, 0,
                Vector{Symbol}(), Vector{CompEvaluation}(),
                Vector{Symbol}(), Vector{Expr}(), Vector{Bool}(), Vector{Vector{Float64}}())
 
@@ -195,11 +195,12 @@ function Instrument(model::Model, domain::AbstractDomain,
     push!(code, "  _instr.counter += 1")
     push!(code, "  return nothing")
     push!(code, "end")
+
     funct = eval(Meta.parse(join(code, "\n")))
 
     compevals = CompEvals(model, domain, compinvolved)
     
-    instr = Instrument(flatten(domain), domain, join(code, "\n"), funct, 0,
+    instr = Instrument(false, flatten(domain), domain, join(code, "\n"), funct, 0,
                        compinvolved, compevals,
                        deepcopy(labels), deepcopy(exprs), cmp, exprevals)
     return instr
@@ -213,7 +214,7 @@ function CompEvals(model::Model, domain::AbstractDomain, compinvolved::Vector{Sy
             npar = length(getparams(wcomp))
             tmp = CompEvaluation(true, npar, fill(false, npar), 0, cd,
                                  Vector{Float64}(undef, npar),
-                                 Vector{Float64}(undef, outsize(cd, domain)))
+                                 Vector{Float64}(undef, outsize(cd, domain)), [NaN])
             tmp.lastParams .= NaN
             push!(compevals, tmp)
         end
@@ -221,23 +222,6 @@ function CompEvals(model::Model, domain::AbstractDomain, compinvolved::Vector{Sy
     return compevals
 end
 
-# Recompile an instrument
-Instrument(model::Model, instr::Instrument) =
-    Instrument(model, instr.domain, instr.exprnames, instr.exprs, instr.exprcmp)
-
-function _recompile!(model::Model, id::Int)
-    tmp = Instrument(model, model.instruments[id])
-    deleteat!(model.instruments, id)
-    insert!(model.instruments, id, tmp)
-    _evaluate!(model)
-    prepareindex1D!(model)
-end
-
-function recompile!(model::Model)
-    for id in 1:length(model.instruments)
-        _recompile!(model, id)
-    end
-end
 
 # ____________________________________________________________________
 # Expressions
@@ -262,26 +246,28 @@ function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{E
     append!(instr.exprnames, labels)
     append!(instr.exprs, exprs)
     append!(instr.exprcmp, cmp)
-    _recompile!(model, id)
+    instr.compile = true
     return labels[end]
 end
 
 
 # ____________________________________________________________________
 function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
-    if c.counter == 0
-        c.counter += 1
-        evaluate!(c.cdata, c.result, d, args...)
+    if c.fixed  &&  (c.counter > 0)
+        return c.result
+        isfinite(c.value[1])  &&  (return c.value)
     else
-        c.fixed  &&  (return c.result)
+        @assert c.npar == length(args)
+        curParams = convert(Vector{Float64}, [args...])
+        neweval = false
         for i in 1:c.npar
-            (c.log[i])  &&  (args[i] = 10. ^args[i])
-            if c.lastParams[i] != args[i]
-                c.lastParams .= args
-                c.counter += 1
-                evaluate!(c.cdata, c.result, d, args...)
-            end
-            (c.log[i])  &&  (args[i] = log10(args[i]))
+            (c.lastParams[i] != curParams[i])  &&  (neweval = true)
+            (c.log[i])  &&  (curParams[i] = 10. ^curParams[i])
+        end
+        if neweval
+            c.lastParams .= args
+            c.counter += 1
+            evaluate!(c.cdata, c.result, d, curParams...)
         end
     end
     return c.result
@@ -294,10 +280,21 @@ function _evaluate!(model::Model, pvalues::Vector{Float64})
     for ii in 1:length(model.instruments)
         _evaluate!(model.instruments[ii], pvalues)
     end
-    return model
 end
 
+
 function _evaluate!(model::Model)
+    for id in 1:length(model.instruments)
+        instr = model.instruments[id]
+        if instr.compile
+            tmp = Instrument(model, instr.domain, instr.exprnames, instr.exprs, instr.exprcmp)
+            deleteat!(model.instruments, id)
+            insert!(model.instruments, id, tmp)
+            _evaluate!(model)
+            prepareindex1D!(model)
+        end
+    end
+
     for instr in model.instruments
         for ii in 1:length(instr.compnames)
             wcomp = model.comp[instr.compnames[ii]]
@@ -308,7 +305,19 @@ function _evaluate!(model::Model)
             end
         end
     end
+
     _evaluate!(model, getparamvalues(model))
+
+    for instr in model.instruments
+        for ceval in instr.compevals
+            ceval.value[1] = NaN
+            if ceval.fixed
+                mm = extrema(ceval.result)
+                (mm[1] == mm[2])  &&  (ceval.value[1] = mm[1])
+            end
+        end
+    end
+    return nothing
 end
 
 
@@ -376,6 +385,7 @@ function _fit!(model::Model, data::Vector{T}; dry=false, minimizer=lsqfit()) whe
 
     @assert typeof(minimizer) <: AbstractMinimizer
     @assert length(model.instruments) >= 1
+    _evaluate!(model)
     params = collect(values(getparams(model)))
     pvalues = getfield.(params, :val)
     uncert = fill(NaN, length(pvalues))

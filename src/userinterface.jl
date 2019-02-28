@@ -137,12 +137,8 @@ function setproperty!(p::Parameter, s::Symbol, value)
     bkp = p.expr
     setfield!(p, s, convert(typeof(getfield(p, s)), value))
     if (s == :expr)  &&  (p._private.model != nothing)
-        try
-            recompile!(p._private.model)
-        catch err
-            show(err)
-            setfield!(p, s, bkp)
-            recompile!(p._private.model)
+        for instr in p._private.model.instruments
+            (p._private.cname in instr.compnames)  &&  (instr.compile = true)
         end
     end
     return value
@@ -152,9 +148,6 @@ end
 # ____________________________________________________________________
 # Instruments/domains
 #
-
-
-
 function add_dom!(w::UI{Model}, dom::AbstractDomain)
     model = wrappee(w)
     push!(model.instruments, Instrument(flatten(dom)))
@@ -192,7 +185,7 @@ function replaceexpr!(w::UI{Model}, id::Int, label::Symbol, expr::Expr)
     ii = findall(label .== model.instruments[id].exprnames)
     @assert length(ii) == 1 "No expression labelled $label in domain $id"
     model.instruments[id].exprs[ii[1]] = expr
-    _recompile!(model, id)
+    model.instruments[id].compile = true
     return model
 end
 
@@ -202,7 +195,7 @@ function setflag!(w::UI{Model}, id::Int, label::Symbol, flag::Bool)
     ii = findall(label .== model.instruments[id].exprnames)
     @assert length(ii) == 1 "No expression labelled $label in domain $id"
     model.instruments[id].exprcmp[ii[1]] = flag
-    recompile!(model)
+    model.instruments[id].compile = true
 end
 
 

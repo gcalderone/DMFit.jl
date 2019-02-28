@@ -222,9 +222,11 @@ mutable struct CompEvaluation
     cdata::AbstractComponentData
     lastParams::Vector{Float64}
     result::Vector{Float64}
+    value::Vector{Float64}
 end
 
 mutable struct Instrument
+    compile::Bool
     ldomain::AbstractLinearDomain
     domain::AbstractDomain
 
