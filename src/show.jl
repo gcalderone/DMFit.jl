@@ -8,7 +8,6 @@ mutable struct PrintSettings
     ruler::String
     tail::String
     width::Int
-    pendingruler::Bool
     plain::Bool
     colormain::Symbol
     colortable::Symbol
@@ -16,7 +15,7 @@ mutable struct PrintSettings
     colorerr::Symbol
     showfixedpars::Bool
 end
-const ps = PrintSettings("", "", "", "", 0, false, false,
+const ps = PrintSettings("", "", "", "", 0, false,
                          :yellow, :light_blue, :light_black, :light_red, false)
 
 function showplain(b::Bool=true)
@@ -80,7 +79,6 @@ function printhead(io::IO, args...)
     ps.ruler = join(ss, "┼")
     ps.tail = join(ss, "┴")
     ps.width = length(tmp)+1
-    ps.pendingruler = false
 
     tmp = join(fill("─", ps.width))
     printstyled(io, color=printcolortable(), ps.prefix, "╭", ps.head, "╮\n", ps.prefix, "│")
@@ -88,18 +86,16 @@ function printhead(io::IO, args...)
     printstyled(io, color=printcolortable(), "│")
     println(io)
 end
-function printrow(io::IO, args...; color=:default, lastingroup=false, sub=false)
+function printrow(io::IO, args...; color=:default, firstingroup=false, sub=false)
     global ps
     (ps.plain)  &&  (return println(io, args...))
-    if ps.pendingruler
+    if firstingroup
         tmp = join(fill("─", ps.width))
         printstyled(io, color=printcolortable(), ps.prefix, "├")
         printstyled(io, ps.ruler, color=printcolorsub())
         printstyled(io, color=printcolortable(), "┤")
         println(io)
-        ps.pendingruler = false
     end
-    ps.pendingruler = lastingroup
 
     printstyled(io, color=printcolortable(), ps.prefix, "│")
     if sub
@@ -125,7 +121,6 @@ function printtail(io::IO)
     (ps.plain)  &&  (return nothing)
     tmp = join(fill("─", ps.width))
     printstyled(io, color=printcolortable(), ps.prefix, "╰", ps.tail, "╯\n")
-    ps.pendingruler = false
 end
 
 function show(io::IO, dom::AbstractCartesianDomain)
@@ -228,10 +223,9 @@ function show(io::IO, wcomp::WComponent; header=true)
         printhead(io, @sprintf "%-15s │ %-10s │ %-10s │ %-15s │ %-16s"  "Component" "Param." "Value" "Range" "Description")
     end
 
-    localcount = 0; lastcount = length(getparams(wcomp))
+    first = !header
     for (pname, param) in getparams(wcomp)
         global ps
-        localcount += 1
         (!ps.showfixedpars)  &&  (wcomp.fixed  ||  param.fixed)  &&  continue
         range = (param.fixed  ?  "     FIXED"  :  @sprintf("%7.2g:%-7.2g", param.low, param.high))
         (param.log)  &&  (range = "L " * range)
@@ -241,10 +235,11 @@ function show(io::IO, wcomp::WComponent; header=true)
                      param.val, range, left(description(comp, param._private.pname), 16))
         if param.expr != ""
             printrow(io, s, color=(param.fixed  ?  printcolorsub()  :  :default))
-            printrow(io, @sprintf("%-15s    ⌊ %s", "", param.expr), lastingroup=(localcount == lastcount), sub=true)
+            printrow(io, @sprintf("%-15s    ⌊ %s", "", param.expr), firstingroup=first, sub=true)
         else
-            printrow(io, s, color=(param.fixed  ?  printcolorsub()  :  :default), lastingroup=(localcount == lastcount))
+            printrow(io, s, color=(param.fixed  ?  printcolorsub()  :  :default), firstingroup=first)
         end
+        first = false
     end
     return nothing
 end
@@ -330,23 +325,22 @@ function show(io::IO, instr::Instrument)
         printrow(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ ",
                               "", cname, ceval.counter,
                               minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : "")),
-                 color=(nan+inf > 0  ?  printcolorerr()  :  (ceval.fixed  ?  printcolorsub()  :  :default)),
-                 lastingroup=(jj==length(instr.compevals)))
+                 color=(nan+inf > 0  ?  printcolorerr()  :  (ceval.fixed  ?  printcolorsub()  :  :default)))
     end
 
-    localcount = 0; lastcount = length(instr.exprs)
+    first = true
     for jj in 1:length(instr.exprs)
-        localcount += 1
         result = instr.exprevals[jj]
         v = view(result, findall(isfinite.(result)))
         nan = length(findall(isnan.(result)))
         inf = length(findall(isinf.(result)))
-        printrow(io, lastingroup=(localcount == lastcount),
+        printrow(io, firstingroup=first,
                   @sprintf("%-2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ %s",
                            (instr.exprcmp[jj]  ?  "⇒"  :  ""),
                            instr.exprnames[jj], instr.counter,
                            minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : ""),
                            left(string(instr.exprs[jj]), availlength)))
+        first = false
     end
     printtail(io)
     println(io)
@@ -375,26 +369,27 @@ function show(io::IO, comp::FitComp; header=true, cname="")
     if header
         printhead(io, @sprintf "%-15s │ %-10s │ %10s │ %10s │ %10s"  "Component" "Param." "Value" "Uncert." "Rel.unc.(%)")
     end
-    localcount = 0;  lastcount = length(comp.params)
+    first = !header
     for (pname, params) in comp.params
-        localcount += 1
         if typeof(params) == Vector{FitParam}
             for ii in 1:length(params)
                 par = params[ii]
                 spname = string(pname) * "[" * string(ii) * "]"
-                printrow(io, lastingroup=((localcount == lastcount)  &&  (ii == length(params))),
+                printrow(io, firstingroup=first,
                          color=(isfinite(par.unc)  ?  :default  :  printcolorsub()),
                          @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
                                   spname, par.val, par.unc, par.unc/abs(par.val)*100.))
+                first = false
             end
         else
             par = params
             spname = string(pname)
             s = @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
                          spname, par.val, par.unc, par.unc/abs(par.val)*100.)
-            printrow(io, s, lastingroup=(localcount == lastcount),
+            printrow(io, s, firstingroup=first,
                      color=(isfinite(par.unc)  ?  :default  :  printcolorsub()))
         end
+        first = false
     end
 end
 
