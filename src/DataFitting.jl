@@ -3,7 +3,7 @@
 # ====================================================================
 module DataFitting
 
-using Printf
+using Printf, PrettyTables
 using Statistics, Distributions
 using DataStructures
 

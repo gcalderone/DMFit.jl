@@ -2,132 +2,34 @@
 #                            SHOW METHODS
 # ====================================================================
 
-mutable struct PrintSettings
-    prefix::String
-    head::String
-    ruler::String
-    tail::String
-    width::Int
-    plain::Bool
-    colormain::Symbol
-    colortable::Symbol
-    colorsub::Symbol
-    colorerr::Symbol
+
+mutable struct ShowSettings
+    format::PrettyTableFormat
+    floatformat::String
+    border::Crayon
+    header::Crayon
+    subheader::Crayon
+    fixed::Crayon
+    error::Crayon
     showfixedpars::Bool
-end
-const ps = PrintSettings("", "", "", "", 0, false,
-                         :yellow, :light_blue, :light_black, :light_red, false)
-
-function showplain(b::Bool=true)
-    global ps
-    ps.plain = b
+    ShowSettings() = new(unicode_rounded, "%10.4g",
+                         crayon"light_blue", crayon"light_blue bold",
+                         crayon"dark_gray bold", crayon"dark_gray",
+                         crayon"light_red blink",
+                         true)
 end
 
-function left(s::AbstractString, maxlen::Int)
-    if maxlen < length(s)
-        return s[1:maxlen-1] * "…"
-    end
-    return s
-end
-function printbold()
-    global ps
-    (ps.plain)  &&  return false
-    return true
-end
-function printcolormain()
-    global ps
-    (ps.plain)  &&  return :default
-    return ps.colormain
-end
-function printcolortable()
-    global ps
-    (ps.plain)  &&  return :default
-    return ps.colortable
-end
-function printcolorsub()
-    global ps
-    (ps.plain)  &&  return :default
-    return ps.colorsub
-end
-function printcolorerr()
-    global ps
-    (ps.plain)  &&  return :default
-    return ps.colorerr
-end
-function printerr( io::IO, args...)
-    printstyled(io, args..., "\n"; bold=printbold(), color=printcolorerr())
-end
-function printmain(io::IO, args...; newline=true)
-    printstyled(io, args...; bold=printbold(), color=printcolormain())
-    (newline)  &&  (println(io))
-end
-function printsub(io::IO, args...; newline=true)
-    global ps
-    print(io, ps.prefix)
-    printstyled(io, args...; bold=printbold())
-    (newline)  &&  (println(io))
-end
-function printhead(io::IO, args...)
-    global ps
-    (ps.plain)  &&  (return println(io, args...))
-    tmp = sprint(print, args...)
-    ss = split(tmp, "│")
-    for i in 1:length(ss)
-        ss[i] = join(fill("─", length(ss[i])))
-    end
-    ps.head = join(ss, "┬")
-    ps.ruler = join(ss, "┼")
-    ps.tail = join(ss, "┴")
-    ps.width = length(tmp)+1
+const showsettings = ShowSettings()
 
-    tmp = join(fill("─", ps.width))
-    printstyled(io, color=printcolortable(), ps.prefix, "╭", ps.head, "╮\n", ps.prefix, "│")
-    printstyled(io, bold=printbold(), color=printcolortable(), args...)
-    printstyled(io, color=printcolortable(), "│")
-    println(io)
-end
-function printrow(io::IO, args...; color=:default, firstingroup=false, sub=false)
-    global ps
-    (ps.plain)  &&  (return println(io, args...))
-    if firstingroup
-        tmp = join(fill("─", ps.width))
-        printstyled(io, color=printcolortable(), ps.prefix, "├")
-        printstyled(io, ps.ruler, color=printcolorsub())
-        printstyled(io, color=printcolortable(), "┤")
-        println(io)
-    end
+printtable(args...; kw...) = pretty_table(args..., showsettings.format; kw...,
+                                          border_crayon=showsettings.border,
+                                          header_crayon=showsettings.header,
+                                          subheader_crayon=showsettings.subheader)
 
-    printstyled(io, color=printcolortable(), ps.prefix, "│")
-    if sub
-        printstyled(io, color=printcolorsub(), args...)
-    else
-        for arg in args
-            ss = split(arg, "│")
-            for i in 1:length(ss)
-                printstyled(io, ss[i], color=color)
-                (i < length(ss))  &&  printstyled(io, "│", color=printcolorsub())
-            end
-        end
-    end
-    tmp = length(sprint(print, args...))+1
-    if tmp <= ps.width
-        tmp = join(fill(" ", ps.width-tmp))
-        printstyled(io, color=printcolortable(), tmp, "│")
-    end
-    println(io)
-end
-function printtail(io::IO)
-    global ps
-    (ps.plain)  &&  (return nothing)
-    tmp = join(fill("─", ps.width))
-    printstyled(io, color=printcolortable(), ps.prefix, "╰", ps.tail, "╯\n")
-end
 
 function show(io::IO, dom::AbstractCartesianDomain)
-    printsub(io, "Cartesian domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
-    s = @sprintf("%3s │ %8s │ %10s │ %10s │ %10s │ %10s",
-                 "Dim", "Size", "Min val", "Max val", "Min step", "Max step")
-    printhead(io, s)
+    println(io, "Cartesian domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
+    table = Matrix{Union{Int,Float64}}(undef, ndims(dom), 6)
     for i in 1:ndims(dom)
         a = dom[i]
         b = 0
@@ -135,214 +37,199 @@ function show(io::IO, dom::AbstractCartesianDomain)
             b = a .- circshift(a, 1)
             b = b[2:end]
         end
-        s = @sprintf("%3d │ %8d │ %10.4g │ %10.4g │ %10.4g │ %10.4g",
-                     i, length(a),
-                     minimum(a), maximum(a),
-                     minimum(b), maximum(b))
-        printrow(io, s)
+        table[i, 1] = i
+        table[i, 2] = length(a)
+        table[i, 3:6] = [minimum(a), maximum(a), minimum(b), maximum(b)]
     end
-    printtail(io)
+    printtable(io, table, ["Dim", "Size", "Min val", "Max val", "Min step", "Max step"],
+               formatter=ft_printf(showsettings.floatformat, 3:6))
 end
 
 
 function show(io::IO, dom::AbstractLinearDomain)
-    printsub(io, "Linear domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
-    s = @sprintf("%3s │ %10s │ %10s",
-                 "Dim", "Min val", "Max val")
-    printhead(io, s)
+    println(io, "Linear domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
+    table = Matrix{Union{Int,Float64}}(undef, ndims(dom), 3)
     for i in 1:ndims(dom)
-        s = @sprintf("%3d │ %10.4g │ %10.4g",
-                     i, getaxismin(dom, i), getaxismax(dom, i))
-        printrow(io, s)
+        table[i, 1] = i
+        table[i, 2] = getaxismin(dom, i)
+        table[i, 3] = getaxismax(dom, i)
     end
-    printtail(io)
+    printtable(io, table, ["Dim", "Min val", "Max val"],
+               formatter=ft_printf(showsettings.floatformat, 2:3))
 end
 
 
 # Special case for Domain_1D: treat it as a Cartesian domain, despite it is a Linear one.
 function show(io::IO, dom::Domain_1D)
-    printsub(io, "Domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
-    s = @sprintf("%3s │ %8s │ %10s │ %10s │ %10s │ %10s",
-                 "Dim", "Size", "Min val", "Max val", "Min step", "Max step")
-    printhead(io, s)
-    a = dom[1]
-    b = 0
-    if length(a) > 1
-        b = a .- circshift(a, 1)
-        b = b[2:end]
+    println(io, "Domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
+    table = Matrix{Union{Int,Float64}}(undef, ndims(dom), 6)
+    for i in 1:ndims(dom)
+        a = dom[i]
+        b = 0
+        if length(a) > 1
+            b = a .- circshift(a, 1)
+            b = b[2:end]
+        end
+        table[i, 1] = i
+        table[i, 2] = length(a)
+        table[i, 3:6] = [minimum(a), maximum(a), minimum(b), maximum(b)]
     end
-    s = @sprintf("%3d │ %8d │ %10.4g │ %10.4g │ %10.4g │ %10.4g",
-                 1, length(a),
-                 minimum(a), maximum(a),
-                 minimum(b), maximum(b))
-    printrow(io, s)
-    printtail(io)
+    printtable(io, table, ["Dim", "Size", "Min val", "Max val", "Min step", "Max step"],
+               formatter=ft_printf(showsettings.floatformat, 3:6))
 end
 
 
 function show(io::IO, data::AbstractData)
-    printsub(io, typeof(data), "   length: ", (length(data.val)))
-    printhead(io, @sprintf("%8s │ %10s │ %10s │ %10s │ %10s │ %10s",
-                           "", "Min", "Max", "Mean", "Median", "Std. dev."))
+    println(io, typeof(data), "   length: ", (length(data.val)))
+    table = Matrix{Union{String,Float64}}(undef, 0, 7)
 
-    nonFinite = Vector{String}()
     names = fieldnames(typeof(data))
     for name in names
         a = getfield(data, name)
-
-        nan = length(findall(isnan.(a)))
-        inf = length(findall(isinf.(a)))
-
-        if nan > 0  || inf > 0
-            push!(nonFinite, @sprintf("%8s │ NaN: %-10d   Inf: %-10d",
-                                      string(name), nan, inf))
-            a = a[findall(isfinite.(a))]
-        end
-
-        s = @sprintf("%8s │ %10.4g │ %10.4g │ %10.4g │ %10.4g │ %10.4g",
-                     string(name),
-                     minimum(a), maximum(a),
-                     mean(a), median(a), std(a))
-        printrow(io, s)
+        nan = length(findall(isnan.(a))) + length(findall(isinf.(a)))
+        a = a[findall(isfinite.(a))]
+        table = vcat(table, [(nan > 0  ?  "⚠"  :  "") string(name) minimum(a) maximum(a) mean(a) median(a) std(a)])
     end
-    printtail(io)
-
-    if length(nonFinite) > 0
-        println(io)
-        for s in nonFinite
-            printerr(s)
-        end
-    end
+    printtable(io, table, ["⚠", "", "Min", "Max", "Mean", "Median", "Std. dev."],
+               formatter=ft_printf(showsettings.floatformat, 3:7))
 end
 
+
+function preparetable(wcomp::WComponent)
+    table = Matrix{Union{String,Float64}}(undef, 0, 7)
+    fixed = Vector{Bool}()
+    error = Vector{Bool}()
+    comp = wcomp.comp
+    cname = string(wcomp.cname)
+    for (pname, param) in getparams(wcomp)
+        (!showsettings.showfixedpars)  &&  (wcomp.fixed  ||  param.fixed)  &&  continue
+        ss = string(pname) * (param._private.index >= 1   ?   "["*string(param._private.index)*"]"  :  "")
+        log = (param.log  ?  "LOG"  :  "")
+        range = (param.fixed  ?  "FIXED"  :  strip(@sprintf("%7.2g:%-7.2g", param.low, param.high)))
+        (range == "-Inf:Inf")  &&  (range = "")
+        table = vcat(table, [cname ss param.val log range param.expr description(comp, param._private.pname)])
+        push!(fixed, param.fixed)
+        push!(error, !(param.low <= param.val <= param.high))
+        cname = ""
+    end
+    return (table, fixed, error)
+end
+
+function preparetable(dict::OrderedDict{Symbol, WComponent})
+    table = Matrix{Union{String,Float64}}(undef, 0, 7)
+    fixed = Vector{Bool}()
+    error = Vector{Bool}()
+    hrule = Vector{Int}()
+    for (cname, wcomp) in dict
+        (t, f, e) = preparetable(wcomp)
+        table = vcat(table, t)
+        append!(fixed, f)
+        append!(error, e)
+        push!(hrule, length(error))
+    end
+    return (table, fixed, error, hrule)
+end
 
 show(io::IO, w::UI{WComponent}) = show(io, wrappee(w))
-function show(io::IO, wcomp::WComponent; header=true)
-    comp = wcomp.comp
-    if header
-        printhead(io, @sprintf "%-15s │ %-10s │ %-10s │ %-15s │ %-16s"  "Component" "Param." "Value" "Range" "Description")
-    end
+show(io::IO, wcomp::WComponent) = show(OrderedDict{Symbol, WComponent}(wcomp.cname => wcomp))
 
-    first = !header
-    for (pname, param) in getparams(wcomp)
-        global ps
-        (!ps.showfixedpars)  &&  (wcomp.fixed  ||  param.fixed)  &&  continue
-        range = (param.fixed  ?  "     FIXED"  :  @sprintf("%7.2g:%-7.2g", param.low, param.high))
-        (param.log)  &&  (range = "L " * range)
-        s = @sprintf("%-15s │ %-10s │ %10.4g │ %-15s │ %-16s",
-                     param._private.cname,
-                     (param._private.index >= 1  ?  Symbol(param._private.pname, "[", param._private.index, "]")  :  pname),
-                     param.val, range, left(description(comp, param._private.pname), 16))
-        if param.expr != ""
-            printrow(io, s, color=(param.fixed  ?  printcolorsub()  :  :default))
-            printrow(io, @sprintf("%-15s    ⌊ %s", "", param.expr), firstingroup=first, sub=true)
-        else
-            printrow(io, s, color=(param.fixed  ?  printcolorsub()  :  :default), firstingroup=first)
-        end
-        first = false
-    end
-    return nothing
+function show(io::IO, dict::OrderedDict{Symbol, WComponent})
+    (table, fixed, error, hrule) = preparetable(dict)
+    printtable(io, table , ["Component" "Param." "Value" "Log" "Range" "Expr" "Notes"], alignment=:l,
+               hlines=hrule, formatter=ft_printf(showsettings.floatformat, [3]),
+               highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),
+                             Highlighter((data,i,j) -> (error[i] && j==5), showsettings.error)))
 end
-
 
 show(io::IO, mime::MIME"text/plain", model::Model) = show(io, model)
 show(io::IO, w::UI{Model}) = show(io, wrappee(w))
 function show(io::IO, model::Model)
-    printmain(io, "Model components:")
+    _evaluate!(model)
+    println(io, "Model components:")
     length(model.comp) != 0  || (return nothing)
 
-    printhead(io, @sprintf "%-15s │ %1s │ %-20s │ %-33s"  "Component" "F" "Type" "Description")
+    table = Matrix{Union{String,Float64}}(undef, 0, 4)
     for (cname, wcomp) in model.comp
         ctype = split(string(typeof(wcomp.comp)), ".")
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
-
-        s = @sprintf("%-15s │ %1s │ %-20s │ %-33s", string(cname),
-                     (wcomp.fixed  ?  "F"  :  ""),
-                     ctype, left(description(wcomp.comp), 33))
-        printrow(io, s, color=(wcomp.fixed  ?  printcolorsub()  :  :default))
+        table = vcat(table, [string(cname) (wcomp.fixed  ?  "F"  :  "") ctype description(wcomp.comp)])
     end
-    printtail(io)
-    println(io)
+    printtable(io, table, ["Component" "F" "Type" "Description"], alignment=:l)
 
-    printsub(io, "Parameters:")
-    header = true
-    for (cname, wcomp) in model.comp
-        show(io, wcomp, header=header)
-        header = false
-    end
-    printtail(io)
+    println(io, "Parameters:")
+    show(io, model.comp)
 
     if length(model.instruments) == 0
         println(io)
-        printmain(io, "Instrument(s): 0")
+        println(io, "Instrument(s): 0")
         return nothing
     end
 
     for i in 1:length(model.instruments)
         println(io)
-        printmain(io, "Instrument #$i ")
+        println(io, "Instrument #$i ")
         show(io, model.instruments[i])
     end
 
-    tmp = length(model.index1d) - 1
-    (tmp < 0)  &&  (tmp = 0)
-    printmain(io, "Instrument(s): ", length(model.instruments),
-              ".  Dataset(s) required for fitting: ", tmp, newline=false)
+     tmp = length(model.index1d) - 1
+     (tmp < 0)  &&  (tmp = 0)
+     println(io, "Instrument(s): ", length(model.instruments),
+               ".  Dataset(s) required for fitting: ", tmp)
 end
 
 
-function show(io::IO, instr::Instrument)
-    # Check max length of expressions
-    exprmaxlength = 0
-    for e in instr.exprs
-        l = length(string(e))
-        (exprmaxlength < l)  &&  (exprmaxlength = l)
-    end
-    #Check available space to fill the terminal
-    availlength = exprmaxlength
-    if ((isa(io, Base.TTY)  ||  isa(io, IOContext))  &&  (displaysize(io)[2] >= 80))
-        availlength = displaysize(io)[2]-76-length(ps.prefix)
-    end
-    (availlength > exprmaxlength)  &&  (availlength = exprmaxlength)
-    (availlength < 4)  &&  (availlength = 4) # Leave space for "Expr" header
 
+function show(io::IO, instr::Instrument)
+#     if ((isa(io, Base.TTY)  ||  isa(io, IOContext))  &&  (displaysize(io)[2] >= 80))
     show(io, instr.domain)
     println(io)
 
-    printsub(io, "Evaluated expression(s):")
-    printhead(io, @sprintf "%2s%-15s │ %7s │ %10s │ %10s │ %10s │ %1s │ %s " "" "Label" "Counter" "Min" "Max" "Mean" "⚠" "Expr"*join(fill(" ", availlength-4)))
+    (length(instr.compevals) == 0)  &&  (return nothing)
+    println(io, "Evaluated expression(s):")
+    table = Matrix{Union{String,Int,Float64}}(undef, length(instr.compevals)+length(instr.exprs), 8)
+    fixed = Vector{Bool}()
+    error = Vector{Bool}()
+    hrule = Vector{Int}()
 
-    for jj in 1:length(instr.compevals)
-        cname = instr.compnames[jj]
-        ceval = instr.compevals[jj]
-
+    for i in 1:length(instr.compevals)
+        cname = instr.compnames[i]
+        ceval = instr.compevals[i]
         result = ceval.result
         v = view(result, findall(isfinite.(result)))
         (length(v) == 0)  &&  (v = [NaN])
         nan = length(findall(isnan.(result)))
         inf = length(findall(isinf.(result)))
-        printrow(io, @sprintf("%2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ ",
-                              "", cname, ceval.counter,
-                              minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : "")),
-                 color=(nan+inf > 0  ?  printcolorerr()  :  (ceval.fixed  ?  printcolorsub()  :  :default)))
+        table[i, 1] = ""
+        table[i, 2] = string(cname)
+        table[i, 3] = ceval.counter
+        table[i, 4:6] = [minimum(v), maximum(v), mean(v)]
+        table[i, 7] = (nan+inf > 0 ? "⚠" : "")
+        table[i, 8] = ""
+        push!(fixed, ceval.fixed)
+        push!(error, (nan+inf > 0))
     end
-
-    first = true
-    for jj in 1:length(instr.exprs)
-        result = instr.exprevals[jj]
+    i0 = length(instr.compevals)
+    
+    for i in 1:length(instr.exprs)
+        result = instr.exprevals[i]
         v = view(result, findall(isfinite.(result)))
         nan = length(findall(isnan.(result)))
         inf = length(findall(isinf.(result)))
-        printrow(io, firstingroup=first,
-                  @sprintf("%-2s%-15s │ %7d │ %10.3g │ %10.3g │ %10.3g │ %1s │ %s",
-                           (instr.exprcmp[jj]  ?  "⇒"  :  ""),
-                           instr.exprnames[jj], instr.counter,
-                           minimum(v), maximum(v), mean(v), (nan+inf > 0 ? "⚠" : ""),
-                           left(string(instr.exprs[jj]), availlength)))
-        first = false
+        table[i0+i, 1] = (instr.exprcmp[i]  ?  "⇒"  :  "")
+        table[i0+i, 2] = string(instr.exprnames[i])
+        table[i0+i, 3] = instr.counter
+        table[i0+i, 4:6] = [minimum(v), maximum(v), mean(v)]
+        table[i0+i, 7] = (nan+inf > 0 ? "⚠" : "")
+        table[i0+i, 8] = string(instr.exprs[i])
+        push!(fixed, false)
+        push!(error, (nan+inf > 0))
     end
-    printtail(io)
+
+    printtable(io, table, ["", "Label", "Counter", "Min", "Max", "Mean", "⚠", "Expr"], alignment=:l,
+               hlines=[i0], formatter=ft_printf(showsettings.floatformat, 4:6),
+               highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),
+                             Highlighter((data,i,j) -> (error[i] && j==5), showsettings.error)))
     println(io)
 end
 
@@ -363,48 +250,58 @@ end
 
 show(io::IO, par::FitParam) = println(io, par.val, " ± ", par.unc)
 
-
 show(io::IO, w::UI{FitComp}) = show(io, wrappee(w))
-function show(io::IO, comp::FitComp; header=true, cname="")
-    if header
-        printhead(io, @sprintf "%-15s │ %-10s │ %10s │ %10s │ %10s"  "Component" "Param." "Value" "Uncert." "Rel.unc.(%)")
-    end
-    first = !header
+
+
+function preparetable(comp::FitComp)
+    table = Matrix{Union{String,Float64}}(undef, 0, 4)
+    fixed = Vector{Bool}()
+    error = Vector{Bool}()
+
     for (pname, params) in comp.params
         if typeof(params) == Vector{FitParam}
             for ii in 1:length(params)
                 par = params[ii]
                 spname = string(pname) * "[" * string(ii) * "]"
-                printrow(io, firstingroup=first,
-                         color=(isfinite(par.unc)  ?  :default  :  printcolorsub()),
-                         @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
-                                  spname, par.val, par.unc, par.unc/abs(par.val)*100.))
-                first = false
+                table = vcat(table, ["" spname par.val par.unc])
+                push!(fixed, false)
+                push!(error, !isfinite(par.unc))
             end
         else
             par = params
             spname = string(pname)
-            s = @sprintf("%-15s │ %-10s │ %10.4g │ %10.4g │ %10.2g", cname,
-                         spname, par.val, par.unc, par.unc/abs(par.val)*100.)
-            printrow(io, s, firstingroup=first,
-                     color=(isfinite(par.unc)  ?  :default  :  printcolorsub()))
+            table = vcat(table, ["" spname par.val par.unc])
+            push!(fixed, false)
+            push!(error, !isfinite(par.unc))
         end
-        first = false
     end
+    return (table, fixed, error)
 end
 
 
 function show(io::IO, w::UI{FitResult})
     res = wrappee(w)
-    printmain(io, "Best Fit results:")
+    println(io, "Best Fit results:")
 
-    first = true
+    table = Matrix{Union{String,Float64}}(undef, 0, 4)
+    fixed = Vector{Bool}()
+    error = Vector{Bool}()
+    hrule = Vector{Int}()    
     for (cname, comp) in res.bestfit
-        show(io, comp, header=first, cname=string(cname))
-        first = false
+        if length(comp.params) > 0
+            (t, f, e) = preparetable(comp)
+            t[1,1] = string(cname)
+            table = vcat(table, t)
+            append!(fixed, f)
+            append!(error, e)
+            push!(hrule, length(error))
+        end
     end
-    printtail(io)
-
+    printtable(io, table , ["Component" "Param." "Value" "Uncert."], alignment=:l,
+               hlines=hrule, formatter=ft_printf(showsettings.floatformat, [3,4]),
+               highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),
+                             Highlighter((data,i,j) -> (error[i] && j==5), showsettings.error)))
+    
     println(io)
     println(io, @sprintf("    #Data  : %10d              Cost : %-10.5g", res.ndata, res.cost))
     println(io, @sprintf("    #Param : %10d              Red. : %-10.4g", res.ndata-res.dof, res.cost / res.dof))
@@ -414,18 +311,18 @@ function show(io::IO, w::UI{FitResult})
     else
         println(io, @sprintf("Prob.: %10.4g", 10^res.log10testprob))
     end
-    printstyled(io, "    Status :  ", bold=printbold())
+    printstyled(io, "    Status :  ")
     if res.status == :Optimal
-        printstyled(color=:green, io, @sprintf("%-15s", "Optimal"), bold=printbold())
+        printstyled(color=:green, io, @sprintf("%-15s", "Optimal"))
     elseif res.status == :NonOptimal
-        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Non Optimal"), bold=printbold())
+        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Non Optimal"))
     elseif res.status == :Warn
-        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Warning"), bold=printbold())
+         printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Warning"))
     elseif res.status == :Error
-        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Error"), bold=printbold())
+        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Error"))
     else
-        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Unknown (" * string(res.status) * "), see fitter output"), bold=printbold())
+        printstyled(color=printcolorerr(), io, @sprintf("%-15s", "Unknown (" * string(res.status) * "), see fitter output"))
     end
     println(io, @sprintf("        Elapsed: %-10.4g s", res.elapsed))
-    println(io)
 end
+
