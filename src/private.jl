@@ -199,7 +199,6 @@ function Instrument(model::Model, domain::AbstractDomain,
     funct = eval(Meta.parse(join(code, "\n")))
 
     compevals = CompEvals(model, domain, compinvolved)
-    
     instr = Instrument(false, flatten(domain), domain, join(code, "\n"), funct, 0,
                        compinvolved, compevals,
                        deepcopy(labels), deepcopy(exprs), cmp, exprevals)
@@ -255,19 +254,24 @@ end
 function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
     if c.fixed  &&  (c.counter > 0)
         isfinite(c.value[1])  &&  (return c.value)
-        return c.result
     else
-        @assert c.npar == length(args)
-        curParams = convert(Vector{Float64}, [args...])
-        neweval = false
-        for i in 1:c.npar
-            (c.lastParams[i] != curParams[i])  &&  (neweval = true)
-            (c.log[i])  &&  (curParams[i] = 10. ^curParams[i])
-        end
-        if neweval  ||  (c.counter == 0)
-            c.lastParams .= args
+        @assert c.npar <= length(args) # "less than" to account for compound components
+        #(length(c.result) == 1)  &&  empty!(c.result) # reset after using `c.value`
+        if c.npar > 0
+            neweval = false
+            for i in 1:c.npar
+                (c.lastParams[i] != args[i])  &&  (neweval = true)
+            end
+            if neweval  ||  (c.counter == 0)
+                c.lastParams .= args[1:c.npar]
+                for i in 1:c.npar;  (c.log[i])  &&  (args[i] = 10. ^args[i]);  end
+                c.counter += 1
+                evaluate!(c.cdata, c.result, d, args...)
+                for i in 1:c.npar;  (c.log[i])  &&  (args[i] = log10(args[i]));  end
+            end
+        elseif c.counter == 0
             c.counter += 1
-            evaluate!(c.cdata, c.result, d, curParams...)
+            evaluate!(c.cdata, c.result, d, args...)
         end
     end
     return c.result

@@ -1,7 +1,3 @@
-# ====================================================================
-#                            SHOW METHODS
-# ====================================================================
-
 mutable struct ShowSettings
     tableformat::PrettyTableFormat
     floatformat::String
@@ -109,7 +105,7 @@ function preparetable(wcomp::WComponent)
     cname = string(wcomp.cname)
     for (pname, param) in getparams(wcomp)
         (!showsettings.fixedpars)  &&  (wcomp.fixed  ||  param.fixed)  &&  continue
-        ss = string(pname) * (param._private.index >= 1   ?   "["*string(param._private.index)*"]"  :  "")
+        ss = string(param._private.pname) * (param._private.index >= 1   ?   "["*string(param._private.index)*"]"  :  "")
         range = (param.fixed  ?  "FIXED"  :  strip(@sprintf("%7.2g:%-7.2g", param.low, param.high)))
         (range == "-Inf:Inf")  &&  (range = "")
         log = (param.log  ?  "LOG"  :  "")
