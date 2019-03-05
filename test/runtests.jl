@@ -6,7 +6,7 @@ f(x, p1, p2, p3, p4, p5) = @. (p1  +  p2 * x  +  p3 * x^2  +  p4 * sin(p5 * x)) 
 params = [1, 1.e-3, 1.e-6, 4, 5]
 
 # Domain for model evaluation
-x = 1.:0.05:10000
+x = 1.:50:10000
 
 # Evaluated model
 y = f(x, params...);

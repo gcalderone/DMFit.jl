@@ -301,6 +301,7 @@ end
 struct FitParam
     val::Float64
     unc::Float64
+    fixed::Bool
 end
 
 struct FitComp

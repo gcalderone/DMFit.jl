@@ -254,8 +254,8 @@ end
 # ____________________________________________________________________
 function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
     if c.fixed  &&  (c.counter > 0)
-        return c.result
         isfinite(c.value[1])  &&  (return c.value)
+        return c.result
     else
         @assert c.npar == length(args)
         curParams = convert(Vector{Float64}, [args...])
@@ -264,7 +264,7 @@ function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
             (c.lastParams[i] != curParams[i])  &&  (neweval = true)
             (c.log[i])  &&  (curParams[i] = 10. ^curParams[i])
         end
-        if neweval
+        if neweval  ||  (c.counter == 0)
             c.lastParams .= args
             c.counter += 1
             evaluate!(c.cdata, c.result, d, curParams...)
@@ -342,9 +342,9 @@ function pvalues2FitComp(model::Model, pvalues::Vector{Float64}, uncert::Vector{
             par._private.fitval = pvalues[ii]
             par._private.fitunc = uncert[ii]
             if par._private.index == 0
-                fitcomp[pname] = FitParam(pvalues[ii], uncert[ii])
+                fitcomp[pname] = FitParam(pvalues[ii], uncert[ii], par.fixed)
             else
-                push!(accum, FitParam(pvalues[ii], uncert[ii]))
+                push!(accum, FitParam(pvalues[ii], uncert[ii], par.fixed))
                 lastpname = par._private.pname
             end
         end

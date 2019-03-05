@@ -2,33 +2,39 @@
 #                            SHOW METHODS
 # ====================================================================
 
-
 mutable struct ShowSettings
-    format::PrettyTableFormat
+    tableformat::PrettyTableFormat
     floatformat::String
     border::Crayon
     header::Crayon
     subheader::Crayon
     fixed::Crayon
     error::Crayon
-    showfixedpars::Bool
+    section::Crayon
+    fixedpars::Bool
     ShowSettings() = new(unicode_rounded, "%10.4g",
                          crayon"light_blue", crayon"light_blue bold",
                          crayon"dark_gray bold", crayon"dark_gray",
-                         crayon"light_red blink",
+                         crayon"light_red blink", crayon"yellow bold",
                          true)
 end
 
 const showsettings = ShowSettings()
 
-printtable(args...; kw...) = pretty_table(args..., showsettings.format; kw...,
+printtable(args...; kw...) = pretty_table(args..., showsettings.tableformat; kw...,
                                           border_crayon=showsettings.border,
                                           header_crayon=showsettings.header,
                                           subheader_crayon=showsettings.subheader)
 
+section(io, args...) = println(io, showsettings.section, args...)
+
+function left(s::String, maxlen::Int)
+    (length(s) <= maxlen)  &&  (return s)
+    return s[1:maxlen]
+end
 
 function show(io::IO, dom::AbstractCartesianDomain)
-    println(io, "Cartesian domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
+    section(io, "Cartesian domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
     table = Matrix{Union{Int,Float64}}(undef, ndims(dom), 6)
     for i in 1:ndims(dom)
         a = dom[i]
@@ -47,7 +53,7 @@ end
 
 
 function show(io::IO, dom::AbstractLinearDomain)
-    println(io, "Linear domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
+    section(io, "Linear domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
     table = Matrix{Union{Int,Float64}}(undef, ndims(dom), 3)
     for i in 1:ndims(dom)
         table[i, 1] = i
@@ -61,7 +67,7 @@ end
 
 # Special case for Domain_1D: treat it as a Cartesian domain, despite it is a Linear one.
 function show(io::IO, dom::Domain_1D)
-    println(io, "Domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
+    section(io, "Domain (ndims: ", ndims(dom), ", length: ", length(dom), ")")
     table = Matrix{Union{Int,Float64}}(undef, ndims(dom), 6)
     for i in 1:ndims(dom)
         a = dom[i]
@@ -80,7 +86,7 @@ end
 
 
 function show(io::IO, data::AbstractData)
-    println(io, typeof(data), "   length: ", (length(data.val)))
+    section(io, typeof(data), "   length: ", (length(data.val)))
     table = Matrix{Union{String,Float64}}(undef, 0, 7)
 
     names = fieldnames(typeof(data))
@@ -102,12 +108,12 @@ function preparetable(wcomp::WComponent)
     comp = wcomp.comp
     cname = string(wcomp.cname)
     for (pname, param) in getparams(wcomp)
-        (!showsettings.showfixedpars)  &&  (wcomp.fixed  ||  param.fixed)  &&  continue
+        (!showsettings.fixedpars)  &&  (wcomp.fixed  ||  param.fixed)  &&  continue
         ss = string(pname) * (param._private.index >= 1   ?   "["*string(param._private.index)*"]"  :  "")
-        log = (param.log  ?  "LOG"  :  "")
         range = (param.fixed  ?  "FIXED"  :  strip(@sprintf("%7.2g:%-7.2g", param.low, param.high)))
         (range == "-Inf:Inf")  &&  (range = "")
-        table = vcat(table, [cname ss param.val log range param.expr description(comp, param._private.pname)])
+        log = (param.log  ?  "LOG"  :  "")
+        table = vcat(table, [cname ss param.val range log param.expr description(comp, param._private.pname)])
         push!(fixed, param.fixed)
         push!(error, !(param.low <= param.val <= param.high))
         cname = ""
@@ -135,7 +141,7 @@ show(io::IO, wcomp::WComponent) = show(OrderedDict{Symbol, WComponent}(wcomp.cna
 
 function show(io::IO, dict::OrderedDict{Symbol, WComponent})
     (table, fixed, error, hrule) = preparetable(dict)
-    printtable(io, table , ["Component" "Param." "Value" "Log" "Range" "Expr" "Notes"], alignment=:l,
+    printtable(io, table , ["Component" "Param." "Value" "Range" "Log" "Expr" "Notes"], alignment=:l,
                hlines=hrule, formatter=ft_printf(showsettings.floatformat, [3]),
                highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),
                              Highlighter((data,i,j) -> (error[i] && j==5), showsettings.error)))
@@ -145,7 +151,7 @@ show(io::IO, mime::MIME"text/plain", model::Model) = show(io, model)
 show(io::IO, w::UI{Model}) = show(io, wrappee(w))
 function show(io::IO, model::Model)
     _evaluate!(model)
-    println(io, "Model components:")
+    section(io, "Model components:")
     length(model.comp) != 0  || (return nothing)
 
     table = Matrix{Union{String,Float64}}(undef, 0, 4)
@@ -157,24 +163,25 @@ function show(io::IO, model::Model)
     end
     printtable(io, table, ["Component" "F" "Type" "Description"], alignment=:l)
 
-    println(io, "Parameters:")
+    println(io)
+    section(io, "Parameters:")
     show(io, model.comp)
 
     if length(model.instruments) == 0
         println(io)
-        println(io, "Instrument(s): 0")
+        section(io, "Instrument(s): 0")
         return nothing
     end
 
     for i in 1:length(model.instruments)
         println(io)
-        println(io, "Instrument #$i ")
+        section(io, "Instrument #$i ")
         show(io, model.instruments[i])
     end
 
      tmp = length(model.index1d) - 1
      (tmp < 0)  &&  (tmp = 0)
-     println(io, "Instrument(s): ", length(model.instruments),
+     section(io, "Instrument(s): ", length(model.instruments),
                ".  Dataset(s) required for fitting: ", tmp)
 end
 
@@ -186,7 +193,7 @@ function show(io::IO, instr::Instrument)
     println(io)
 
     (length(instr.compevals) == 0)  &&  (return nothing)
-    println(io, "Evaluated expression(s):")
+    section(io, "Evaluated expression(s):")
     table = Matrix{Union{String,Int,Float64}}(undef, length(instr.compevals)+length(instr.exprs), 8)
     fixed = Vector{Bool}()
     error = Vector{Bool}()
@@ -221,7 +228,7 @@ function show(io::IO, instr::Instrument)
         table[i0+i, 3] = instr.counter
         table[i0+i, 4:6] = [minimum(v), maximum(v), mean(v)]
         table[i0+i, 7] = (nan+inf > 0 ? "⚠" : "")
-        table[i0+i, 8] = string(instr.exprs[i])
+        table[i0+i, 8] = left(string(instr.exprs[i]), 30)
         push!(fixed, false)
         push!(error, (nan+inf > 0))
     end
@@ -262,16 +269,18 @@ function preparetable(comp::FitComp)
         if typeof(params) == Vector{FitParam}
             for ii in 1:length(params)
                 par = params[ii]
+                (!showsettings.fixedpars)  &&  (par.fixed)  &&  continue
                 spname = string(pname) * "[" * string(ii) * "]"
                 table = vcat(table, ["" spname par.val par.unc])
-                push!(fixed, false)
+                push!(fixed, par.fixed)
                 push!(error, !isfinite(par.unc))
             end
         else
             par = params
+            (!showsettings.fixedpars)  &&  (par.fixed)  &&  continue
             spname = string(pname)
             table = vcat(table, ["" spname par.val par.unc])
-            push!(fixed, false)
+            push!(fixed, par.fixed)
             push!(error, !isfinite(par.unc))
         end
     end
@@ -281,7 +290,7 @@ end
 
 function show(io::IO, w::UI{FitResult})
     res = wrappee(w)
-    println(io, "Best Fit results:")
+    section(io, "Best Fit results:")
 
     table = Matrix{Union{String,Float64}}(undef, 0, 4)
     fixed = Vector{Bool}()
@@ -300,7 +309,7 @@ function show(io::IO, w::UI{FitResult})
     printtable(io, table , ["Component" "Param." "Value" "Uncert."], alignment=:l,
                hlines=hrule, formatter=ft_printf(showsettings.floatformat, [3,4]),
                highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),
-                             Highlighter((data,i,j) -> (error[i] && j==5), showsettings.error)))
+                             Highlighter((data,i,j) -> (error[i]  &&  (!fixed[i])  &&  (j==4)), showsettings.error)))
     
     println(io)
     println(io, @sprintf("    #Data  : %10d              Cost : %-10.5g", res.ndata, res.cost))

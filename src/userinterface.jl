@@ -285,7 +285,7 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}; delta=3., kw...) whe
                 push!(ipar, ii)
                 @assert isfinite(par._private.fitunc) "The model has not been fit: can't guess step for parameter"
                 pvalues = deepcopy(pvalues0)
-                lo = pvalues0[ii] - par._private.fitunc/2
+                lo = pvalues0[ii] - par._private.fitunc/5
                 while true
                     if lo < par.low
                         lo = par.low
@@ -295,9 +295,9 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}; delta=3., kw...) whe
                     _evaluate!(model, pvalues)
                     cost = sum(abs2, residuals1d(model, data1d))
                     (abs(cost - cost0) >= delta)  &&  break
-                    lo -= par._private.fitunc/2
+                    lo -= par._private.fitunc/5
                 end
-                hi = pvalues0[ii] + par._private.fitunc
+                hi = pvalues0[ii] + par._private.fitunc/5
                 while true
                     if lo > par.high
                         hi = par.high
@@ -307,7 +307,7 @@ function probe(lparams::Vector{Parameter}, data::Vector{T}; delta=3., kw...) whe
                     _evaluate!(model, pvalues)
                     cost = sum(abs2, residuals1d(model, data1d))
                     (abs(cost - cost0) >= delta)  &&  break
-                    hi += par._private.fitunc/2
+                    hi += par._private.fitunc/5
                 end
                 append!(range, [lo, hi])
             end
