@@ -346,7 +346,7 @@ function pvalues2FitComp(model::Model, pvalues::Vector{Float64}, uncert::Vector{
             par._private.fitval = pvalues[ii]
             par._private.fitunc = uncert[ii]
             if par._private.index == 0
-                fitcomp[pname] = FitParam(pvalues[ii], uncert[ii], par.fixed)
+                fitcomp[pname] = FitParam(pvalues[ii], uncert[ii], par.cfixed || par.fixed)
             else
                 push!(accum, FitParam(pvalues[ii], uncert[ii], par.fixed))
                 lastpname = par._private.pname

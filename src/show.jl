@@ -12,7 +12,7 @@ mutable struct ShowSettings
                          crayon"light_blue", crayon"light_blue bold",
                          crayon"dark_gray bold", crayon"dark_gray",
                          crayon"light_red blink", crayon"yellow bold",
-                         true)
+                         false)
 end
 
 const showsettings = ShowSettings()
@@ -137,6 +137,7 @@ show(io::IO, wcomp::WComponent) = show(OrderedDict{Symbol, WComponent}(wcomp.cna
 
 function show(io::IO, dict::OrderedDict{Symbol, WComponent})
     (table, fixed, error, hrule) = preparetable(dict)
+    (length(table) > 0)  ||  (return nothing)
     printtable(io, table , ["Component" "Param." "Value" "Range" "Log" "Expr" "Notes"], alignment=:l,
                hlines=hrule, formatter=ft_printf(showsettings.floatformat, [3]),
                highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),
@@ -151,13 +152,16 @@ function show(io::IO, model::Model)
     length(model.comp) != 0  || (return nothing)
 
     table = Matrix{Union{String,Float64}}(undef, 0, 4)
+    fixed = Vector{Bool}()
     for (cname, wcomp) in model.comp
         ctype = split(string(typeof(wcomp.comp)), ".")
         (ctype[1] == "DataFitting")  &&   (ctype = ctype[2:end])
         ctype = join(ctype, ".")
         table = vcat(table, [string(cname) (wcomp.fixed  ?  "F"  :  "") ctype description(wcomp.comp)])
+        push!(fixed, wcomp.fixed)
     end
-    printtable(io, table, ["Component" "F" "Type" "Description"], alignment=:l)
+    printtable(io, table, ["Component" "F" "Type" "Description"], alignment=:l,
+               highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),))
 
     println(io)
     section(io, "Parameters:")
@@ -295,6 +299,7 @@ function show(io::IO, w::UI{FitResult})
     for (cname, comp) in res.bestfit
         if length(comp.params) > 0
             (t, f, e) = preparetable(comp)
+            (length(t) > 0)  ||  continue
             t[1,1] = string(cname)
             table = vcat(table, t)
             append!(fixed, f)

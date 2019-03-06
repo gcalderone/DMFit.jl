@@ -23,7 +23,7 @@ getproperty(w::UI{Model}, s::Symbol) = UI{WComponent}(get(wrappee(w).comp, s, no
 getindex(w::UI{Model}, s::Symbol) = getproperty(w, s)
 
 
-code(w::UI{Model}, id::Int=1) = println(wrappee(w).instruments[id].code)
+code(w::UI{Model}, id::Int=1) = wrappee(w).instruments[id].code
 
 function (w::UI{Model})(id::Int, expr::Symbol)
     model = wrappee(w)
