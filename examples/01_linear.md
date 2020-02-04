@@ -40,7 +40,7 @@ The last command will trigger the `show` method for the `Measure` object, and th
 
 All the `show` methods implemented in the DataFitting package are characterized by the blue frame around the tables (the appearence can be customized, see Example TODO).
 
-In this case the first line reports the type of the object: `Measures_1D` (i.e. one-dimensional), with 101 samples.  This object has two properties: `val` and `unc`, each holding a vector for the value and uncertainties for each sample.  The columns in the table reports the minimum, maximum, average, median and standard deviation for the values and uncertainties vectors.
+In this case the first line reports the type of the object: `Measures_1D` (i.e. one-dimensional), with 101 samples.  This object has two properties: `val` and `unc`, each containing a vector for the value and uncertainties for each sample.  The columns in the table reports the minimum, maximum, average, median and standard deviation for the values and uncertainties vectors.
 
 ## Model preparation
 ```julia
@@ -53,7 +53,7 @@ add_dom!(model, x)
 # Set the mathematical expression to evaluate the model
 addexpr!(model, :(a .+ b .* domain[1]))
 
-model
+show(model)
 ```
 The last command will trigger the `show` method for the `Model` object, and the following data will be shown in the REPL:
 ![show_model](https://github.com/gcalderone/DataFitting.jl/blob/master/examples/01_model.png)
@@ -75,11 +75,11 @@ This shows the current status of the model.  From top to bottom, it shows:
 result = fit!(model, data)
 
 # Plot data (accessible through `data.val`), uncertainties
-# (`data.unc`) and best fit model (`model[]`).  The independent
+# (`data.unc`) and best fit model (`model()`).  The independent
 # variable is available through `model[].domain`.
 
-@gp    model[].domain data.val data.unc "w yerr t 'Data'" :- 
-@gp :- model[].domain model[].expr1 "w line t 'Model'"
+@gp    model(:domain) data.val data.unc "w yerr t 'Data'" :- 
+@gp :- model(:domain) model() "w line t 'Model'"
 
 # Compare "true" parameter values with best fit ones:
 using Printf

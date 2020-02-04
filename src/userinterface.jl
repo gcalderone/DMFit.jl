@@ -129,13 +129,15 @@ end
 #
 function propertynames(p::Parameter)
     out = collect(fieldnames(Parameter))
-    out = out[findall((out .!= :_private)  &&
+    out = out[findall((out .!= :_private)  .&
                       (out .!= :cfixed))]
 end
 
 function setproperty!(p::Parameter, s::Symbol, value)
     bkp = p.expr
     setfield!(p, s, convert(typeof(getfield(p, s)), value))
+
+    # If updating the parameter expression engage future re-compilation
     if (s == :expr)  &&  (p._private.model != nothing)
         for instr in p._private.model.instruments
             (p._private.cname in instr.compnames)  &&  (instr.compile = true)

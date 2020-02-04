@@ -17,10 +17,10 @@ end
 
 const showsettings = ShowSettings()
 
-printtable(args...; kw...) = pretty_table(args..., showsettings.tableformat; kw...,
+printtable(args...; kw...) = pretty_table(args...; tf=showsettings.tableformat, kw...,
                                           border_crayon=showsettings.border,
                                           header_crayon=showsettings.header,
-                                          subheader_crayon=showsettings.subheader)
+                                          subheader_crayon=showsettings.subheader, crop=:horizontal)
 
 section(io, args...) = println(io, showsettings.section, args...)
 
@@ -148,7 +148,7 @@ show(io::IO, mime::MIME"text/plain", model::Model) = show(io, model)
 show(io::IO, w::UI{Model}) = show(io, wrappee(w))
 function show(io::IO, model::Model)
     _evaluate!(model)
-    section(io, "Model components:")
+    section(io, "List of components:")
     length(model.comp) != 0  || (return nothing)
 
     table = Matrix{Union{String,Float64}}(undef, 0, 4)
@@ -164,7 +164,7 @@ function show(io::IO, model::Model)
                highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),))
 
     println(io)
-    section(io, "Parameters:")
+    section(io, "List of parameters:")
     show(io, model.comp)
 
     if length(model.instruments) == 0

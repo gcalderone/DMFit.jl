@@ -4,24 +4,22 @@
 
 [![Build Status](https://travis-ci.org/gcalderone/DataFitting.jl.svg?branch=master)](https://travis-ci.org/gcalderone/DataFitting.jl)
 
-## Key features
+It provides the basic tools to build, inspect and efficiently fit complex models against empirical data.
+
+The typical use case for `DataFitting` is as follows: you observe a physical phenomenon with one (or more) instrument(s) and wish to fit those data against a (possibly very complex) theoretical model, in order to extract the characterizing quantities represented by the model parameters.  `DataFitting` provides the following benefits:
 - it handles data of any dimensionality;
 - the fitting model is evaluated on a user provided (Cartesian or Linear) domain;
-- the fitting model is built up by individual *components*, either provided by the companion package [`DataFittingBasics.jl`](https://github.com/gcalderone/DataFittingBasics.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression;
-- all components results are cached, so that repeated evaluations with the same parameters do not involve further calculations.  This is very important to speed up the fitting process when many components are involved;
-- User provided components can pre-compute quantities based on the model domain before running the fitting process, and store them in a private structure for future re-use;
-- Model parameters can be fixed to a specific value, limited in a interval, or be dynamically calculated using a mathematical expression involving the other parameters;
-- it allows fitting multiple data sets;
-- it easily allows to use different minimizers, and compare their results and performances.  Currently two minimizers are supported ([LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl) and [CMPFit](https://github.com/gcalderone/CMPFit.jl));
-- provides several facilities for interactive fitting and results displaying.
+- the fitting model is built up by individual *components*, either provided by the companion package [`DataFittingBasics.jl`](https://github.com/gcalderone/DataFittingBasics.jl) or implemented by the user.  All components are combined to evaluate the final model with a standard Julia mathematical expression.  Component composition is also supported;
+- all components results are cached, so that repeated evaluations with the same parameter values do not involve further calculations.  This is very important to speed up the fitting process when many components are involved;
+- User provided components can pre-compute quantities based on the model domain, and store them in a private structure;
+- Model parameters can be fixed to a specific value, limited in a interval, or be dynamically calculated using a mathematical expression involving the other parameters.  Fit of logarithmic values is also supported;
+- multiple data sets can be fitted simultaneously;
+- it allows to use different minimizers, and compare their results and performances (currently two minimizers are supported: [LsqFit](https://github.com/JuliaNLSolvers/LsqFit.jl) and [CMPFit](https://github.com/gcalderone/CMPFit.jl));
+- it provides several facilities for interactive fitting and results displaying.
+
+See below for a simple example and the `examples` directory for more complex ones.
 
 ## Installation
-On Julia v0.6:
-```julia
-Pkg.add("DataFitting.jl")
-```
-
-On Julia v0.7/v1.0:
 ```julia
 ] add DataFitting
 ```

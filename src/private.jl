@@ -213,7 +213,7 @@ function CompEvals(model::Model, domain::AbstractDomain, compinvolved::Vector{Sy
             npar = length(getparams(wcomp))
             tmp = CompEvaluation(true, npar, fill(false, npar), 0, cd,
                                  Vector{Float64}(undef, npar),
-                                 Vector{Float64}(undef, outsize(cd, domain)), [NaN])
+                                 Vector{Float64}(undef, outsize(cd, domain)))
             tmp.lastParams .= NaN
             push!(compevals, tmp)
         end
@@ -252,27 +252,22 @@ end
 
 # ____________________________________________________________________
 function _evaluate!(c::CompEvaluation, d::AbstractDomain, args...)
-    if c.fixed  &&  (c.counter > 0)
-        isfinite(c.value[1])  &&  (return c.value)
-    else
-        @assert c.npar <= length(args) # "less than" to account for compound components
-        #(length(c.result) == 1)  &&  empty!(c.result) # reset after using `c.value`
-        if c.npar > 0
-            neweval = false
-            for i in 1:c.npar
-                (c.lastParams[i] != args[i])  &&  (neweval = true)
-            end
-            if neweval  ||  (c.counter == 0)
-                c.lastParams .= args[1:c.npar]
-                for i in 1:c.npar;  (c.log[i])  &&  (args[i] = 10. ^args[i]);  end
-                c.counter += 1
-                evaluate!(c.cdata, c.result, d, args...)
-                for i in 1:c.npar;  (c.log[i])  &&  (args[i] = log10(args[i]));  end
-            end
-        elseif c.counter == 0
+    @assert c.npar <= length(args) # "less than" to account for compound components
+    if c.npar > 0
+        neweval = false
+        for i in 1:c.npar
+            (c.lastParams[i] != args[i])  &&  (neweval = true)
+        end
+        if neweval  ||  (c.counter == 0)
+            c.lastParams .= args[1:c.npar]
+            for i in 1:c.npar;  (c.log[i])  &&  (args[i] = 10. ^args[i]);  end
             c.counter += 1
             evaluate!(c.cdata, c.result, d, args...)
+            for i in 1:c.npar;  (c.log[i])  &&  (args[i] = log10(args[i]));  end
         end
+    elseif c.counter == 0
+        c.counter += 1
+        evaluate!(c.cdata, c.result, d, args...)
     end
     return c.result
 end
@@ -312,15 +307,6 @@ function _evaluate!(model::Model)
 
     _evaluate!(model, getparamvalues(model))
 
-    for instr in model.instruments
-        for ceval in instr.compevals
-            ceval.value[1] = NaN
-            if ceval.fixed
-                mm = extrema(ceval.result)
-                (mm[1] == mm[2])  &&  (ceval.value[1] = mm[1])
-            end
-        end
-    end
     return nothing
 end
 
@@ -372,15 +358,6 @@ function residuals1d(model::Model, data1d::Vector{Measures_1D}) where T<:Abstrac
         end
     end
     return model.buffer1d
-end
-
-
-function _fit(model::Model, data::Vector{T}; kw...) where T<:AbstractMeasures
-    pval = getparamvalues(model)
-    res = _fit!(model, data; kw...)
-    setparamvalues!(model, pval)
-    _evaluate!(model)
-    return res
 end
 
 
