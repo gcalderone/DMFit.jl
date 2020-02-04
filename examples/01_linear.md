@@ -78,8 +78,8 @@ result = fit!(model, data)
 # (`data.unc`) and best fit model (`model()`).  The independent
 # variable is available through `model[].domain`.
 
-@gp    model(:domain) data.val data.unc "w yerr t 'Data'" :- 
-@gp :- model(:domain) model() "w line t 'Model'"
+@gp    domain(model) data.val data.unc "w yerr t 'Data'" :- 
+@gp :- domain(model) model() "w line t 'Model'"
 
 # Compare "true" parameter values with best fit ones:
 using Printf

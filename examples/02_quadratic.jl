@@ -26,8 +26,8 @@ data = Measures(y, noise)
 # Prepare the model.  Note that we start with an empty model, and add
 # the components one by one:
 model = Model()
-addcomp!(model, :p0 => ScalarParam(1))   # add 1st component
-addcomp!(model, :p1 => ScalarParam(2))   # add 2nd component
+addcomp!(model, :p0 => ScalarParam(1))    # add 1st component
+addcomp!(model, :p1 => ScalarParam(2))    # add 2nd component
 add_dom!(model, x)                        # set domain
 addexpr!(model, :(p0 .+ p1 .* domain[1])) # add model expression
 
@@ -36,8 +36,8 @@ result = fit!(model, data)
 
 # Plot data and best fit model
 using Gnuplot
-@gp    model(:domain) data.val data.unc "w yerr t 'Data'" :- 
-@gp :- model(:domain) model() "w line t 'Model'"
+@gp    domain(model) data.val data.unc "w yerr t 'Data'" :- 
+@gp :- domain(model) model() "w line t 'Model'"
 
 # Print the reduced chi-squared and the probability that random noise
 # may lead to higher chi-squared values.  Note that the latter is
@@ -54,8 +54,8 @@ replaceexpr!(model, :(p0 .+ p1 .* domain[1] .+ p2 .* domain[1].^2))
 
 # Fit model to empirical data and plot
 result = fit!(model, data)
-@gp    model(:domain) data.val data.unc "w yerr t 'Data'" :- 
-@gp :- model(:domain) model() "w line t 'Model'"
+@gp    domain(model) data.val data.unc "w yerr t 'Data'" :- 
+@gp :- domain(model) model() "w line t 'Model'"
 
 # Compare "true" parameter values with best fit ones:
 using Printf

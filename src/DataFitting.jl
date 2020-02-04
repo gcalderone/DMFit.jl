@@ -20,7 +20,7 @@ import Base.isequal
 
 export Domain, CartesianDomain, Measures,
     FuncWrap, ScalarParam, Smooth,
-    Model, getparamvalues, setparamvalues!, resetcounters!,
+    Model, getparamvalues, setparamvalues!, resetcounters!, domain,
     componenttype, addcomp!,
     add_dom!, rm_dom!, dom_count,
     addexpr!, replaceexpr!, setflag!,

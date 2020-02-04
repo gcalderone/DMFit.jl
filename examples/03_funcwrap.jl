@@ -43,5 +43,5 @@ end
 
 # Plot data and best fit model
 using Gnuplot
-@gp    model(:domain) data.val data.unc "w yerr" :- 
-@gp :- model(:domain) model() "w line"
+@gp    domain(model) data.val data.unc "w yerr" :- 
+@gp :- domain(model) model() "w line"

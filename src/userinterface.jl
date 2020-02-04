@@ -25,6 +25,19 @@ getindex(w::UI{Model}, s::Symbol) = getproperty(w, s)
 
 code(w::UI{Model}, id::Int=1) = wrappee(w).instruments[id].code
 
+function domain(w::UI{Model}, id::Int=1)
+    model = wrappee(w)
+    c = model.instruments
+    @assert length(c) >= 1 "No domain in model"
+    @assert 1 <= id <= length(c) "Invalid index (allowed range: 1 : " * string(length(c)) * ")"
+    instr = c[id]
+
+    ret = instr.domain
+    (ndims(ret) == 1)  &&  (return ret[1])
+    return ret
+end
+
+
 function (w::UI{Model})(id::Int, expr::Symbol)
     model = wrappee(w)
     c = model.instruments
@@ -32,11 +45,6 @@ function (w::UI{Model})(id::Int, expr::Symbol)
     @assert 1 <= id <= length(c) "Invalid index (allowed range: 1 : " * string(length(c)) * ")"
     instr = c[id]
 
-    if expr == :domain
-        ret = instr.domain
-        (ndims(ret) == 1)  &&  (return ret[1])
-        return ret
-    end
     i = findall(expr .== instr.compnames)
     if length(i) == 1
         return instr.compevals[i[1]].result
