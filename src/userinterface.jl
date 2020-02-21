@@ -20,7 +20,7 @@ Model(args::Vararg{Pair, N}) where N =
 
 propertynames(w::UI{Model}) = collect(keys(wrappee(w).comp))
 getproperty(w::UI{Model}, s::Symbol) = UI{WComponent}(get(wrappee(w).comp, s, nothing))
-#getindex(w::UI{Model}, s::Symbol) = getproperty(w, s)
+getindex(w::UI{Model}, s::Symbol) = getproperty(w, s)
 
 
 code(w::UI{Model}, id::Int=1) = wrappee(w).instruments[id].code
