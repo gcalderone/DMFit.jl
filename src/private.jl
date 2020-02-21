@@ -228,19 +228,19 @@ end
 newexprlabel(model::Model, id::Int) = Symbol(:expr, length(model.instruments[id].exprs)+1)
 newexprlabel(model::Model, id::Int, n::Int) = Symbol.(Ref(:expr), length(model.instruments[id].exprs) .+ collect(1:n))
 
-addexpr!(model::Model                                 , expr::Expr         ; cmp=true) = addexpr!(model,  1, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
-addexpr!(model::Model                                 , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
-addexpr!(model::Model                                 , exprs::Vector{Expr}; cmp=true) = addexpr!(model,  1,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
+add_expr!(model::Model                                 , expr::Expr         ; cmp=true) = add_expr!(model,  1, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
+add_expr!(model::Model                                 , symbol::Symbol     ; cmp=true) = add_expr!(model,  1, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
+add_expr!(model::Model                                 , exprs::Vector{Expr}; cmp=true) = add_expr!(model,  1,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
 
-addexpr!(model::Model, id::Int                        , expr::Expr         ; cmp=true) = addexpr!(model, id, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
-addexpr!(model::Model, id::Int                        , symbol::Symbol     ; cmp=true) = addexpr!(model, id, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
-addexpr!(model::Model, id::Int                        , exprs::Vector{Expr}; cmp=true) = addexpr!(model, id,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
+add_expr!(model::Model, id::Int                        , expr::Expr         ; cmp=true) = add_expr!(model, id, [newexprlabel(model, 1)]              , [expr]       ; cmp=[cmp])
+add_expr!(model::Model, id::Int                        , symbol::Symbol     ; cmp=true) = add_expr!(model, id, [newexprlabel(model, 1)]              , [:(+$symbol)]; cmp=[cmp])
+add_expr!(model::Model, id::Int                        , exprs::Vector{Expr}; cmp=true) = add_expr!(model, id,  newexprlabel(model, 1, length(exprs)), exprs        ; cmp=fill(cmp, length(exprs)))
 
-addexpr!(model::Model,          label::Symbol         , expr::Expr         ; cmp=true) = addexpr!(model,  1, [label]                               , [expr]       ; cmp=[cmp])
-addexpr!(model::Model,          label::Symbol         , symbol::Symbol     ; cmp=true) = addexpr!(model,  1, [label]                               , [:(+$symbol)]; cmp=[cmp])
-addexpr!(model::Model,          labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=true) = addexpr!(model,  1,  labels                               , exprs        ; cmp=fill(cmp, length(exprs)))
+add_expr!(model::Model,          label::Symbol         , expr::Expr         ; cmp=true) = add_expr!(model,  1, [label]                               , [expr]       ; cmp=[cmp])
+add_expr!(model::Model,          label::Symbol         , symbol::Symbol     ; cmp=true) = add_expr!(model,  1, [label]                               , [:(+$symbol)]; cmp=[cmp])
+add_expr!(model::Model,          labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=true) = add_expr!(model,  1,  labels                               , exprs        ; cmp=fill(cmp, length(exprs)))
 
-function addexpr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=Vector{Bool}())
+function add_expr!(model::Model, id::Int, labels::Vector{Symbol}, exprs::Vector{Expr}; cmp=Vector{Bool}())
     instr = model.instruments[id]
     append!(instr.exprnames, labels)
     append!(instr.exprs, exprs)

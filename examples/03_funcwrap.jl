@@ -31,7 +31,7 @@ model = Model(:comp1 => FuncWrap(f, params...))
 # Set model domain and model expression, which in this case is simply
 # the `comp1` component
 add_dom!(model, x)
-addexpr!(model, 1, :comp1)
+add_expr!(model, 1, :comp1)
 
 # Fit the model to empirical data
 result = fit!(model, data)

@@ -51,7 +51,7 @@ model = Model(:a => ScalarParam(1), :b => ScalarParam(2))
 add_dom!(model, x)
 
 # Set the mathematical expression to evaluate the model
-addexpr!(model, :(a .+ b .* domain[1]))
+add_expr!(model, :(a .+ b .* domain[1]))
 
 show(model)
 ```
@@ -65,7 +65,7 @@ This shows the current status of the model.  From top to bottom, it shows:
 
 - The *"instrument(s)"* used to obtain the empirical data.  *Instrument* here is a synonim for domain: there is one instrument for each domain added to the model with `add_dom!`.  The user may add as many domains as needed.  For each domain the corresponding `show` method is invoked, and the domain details reported.  In this case the domain is one-dimensional, and has 101 samples.  For each dimension of the domain the size, minimum and maximum values, and minimum and maximum steps are reported;
 
-- For each instrument (i.e., model domain) the list of evaluated expressions are reported. The entries above the horizontal white line are the components involved in the expressions (in this case `a` and `b`).  The entries below the lines are the expressions added with `addexpr!`.  For each expression the table reports how many times the expression has been evaluated, as well as the minimum, maximum and mean value of the results.  The last two columns reports respectively a flag to hgihlight NaN/infinite values in the evaluation, and the actual mathematical expression.  Note that the `expr1` expression has an arrow in the first column: it indicates that the results of this expression is to be compared with empirical data.  You may toggle this flag with `setflag!`;
+- For each instrument (i.e., model domain) the list of evaluated expressions are reported. The entries above the horizontal white line are the components involved in the expressions (in this case `a` and `b`).  The entries below the lines are the expressions added with `add_expr!`.  For each expression the table reports how many times the expression has been evaluated, as well as the minimum, maximum and mean value of the results.  The last two columns reports respectively a flag to hgihlight NaN/infinite values in the evaluation, and the actual mathematical expression.  Note that the `expr1` expression has an arrow in the first column: it indicates that the results of this expression is to be compared with empirical data.  You may toggle this flag with `setflag!`;
 
 - Finally, it shows the total number of instruments defined, and the number of datasets required for fitting.
 

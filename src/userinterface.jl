@@ -16,7 +16,7 @@ wrappee(v::UI{T}) where T = getfield(v, :_w)
 #
 Model() = UI{Model}(Model(nothing))
 Model(args::Vararg{Pair, N}) where N =
-    addcomp!(Model(), args...)
+    add_comp!(Model(), args...)
 
 propertynames(w::UI{Model}) = collect(keys(wrappee(w).comp))
 getproperty(w::UI{Model}, s::Symbol) = UI{WComponent}(get(wrappee(w).comp, s, nothing))
@@ -87,7 +87,7 @@ function setproperty!(w::UI{WComponent}, s::Symbol, value)
 end
 
 
-function addcomp!(w::UI{Model}, args::Vararg{Pair, N}) where N
+function add_comp!(w::UI{Model}, args::Vararg{Pair, N}) where N
     model = wrappee(w)
 
     for c in args
@@ -178,7 +178,7 @@ dom_count(w::UI{Model}) = length(wrappee(w).instruments)
 # ____________________________________________________________________
 # Expressions
 #
-addexpr!(w::UI{Model}, args...; kw...) = addexpr!(wrappee(w), args...; kw...)
+add_expr!(w::UI{Model}, args...; kw...) = add_expr!(wrappee(w), args...; kw...)
 
 replaceexpr!(w::UI{Model}, label::Symbol, expr::Expr) = replaceexpr!(w::UI{Model}, 1, label, expr)
 
@@ -216,8 +216,6 @@ evaluate!(w::UI{Model}) = _evaluate!(wrappee(w))
 
 fit!(w::UI{Model}, data::AbstractData; kw...) = _fit!(wrappee(w), [data]; kw...)
 fit!(w::UI{Model}, data::Vector{T}; kw...) where T<:AbstractMeasures = _fit!(wrappee(w), data; kw...)
-fit(w::UI{Model}, data::AbstractData; kw...) = _fit(wrappee(w), [data]; kw...)
-fit(w::UI{Model}, data::Vector{T}; kw...) where T<:AbstractMeasures = _fit(wrappee(w), data; kw...)
 
 function propertynames(w::UI{FitResult})
     res = wrappee(w)
@@ -247,7 +245,7 @@ getproperty(w::UI{FitComp}, s::Symbol) = wrappee(w).params[s]
 function test_component(comp::AbstractComponent, args...; iter=10)
     model = Model(:test => comp)
     add_dom!(model, args...)
-    addexpr!(model, :test)
+    add_expr!(model, :test)
 
     println("Warmup:")
     @time result = evaluate!(model)
