@@ -35,4 +35,6 @@ include("private.jl")
 include("userinterface.jl")
 include("show.jl")
 
+const extfunc = Dict{Symbol, Function}()
+
 end
