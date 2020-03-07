@@ -535,11 +535,11 @@ To produce the plots I will use the [Gnuplot.jl](https://github.com/gcalderone/G
 using Gnuplot
 
 # Plot the model...
-@gsp dom[1] dom[2] reshape(model(), size(dom))
+@gsp dom[1] dom[2] reshape(model(), dom)
 
 # ...and the residuals
-@gsp dom[1] dom[2] reshape(data.val - model(), size(dom))
+@gsp dom[1] dom[2] reshape(data.val - model(), dom)
 
 # Plot using pm3d style
-@gsp "set pm3d" "set palette" dom[1] dom[2] reshape(model(), size(dom)) "w dots"
+@gsp "set pm3d" "set palette" dom[1] dom[2] reshape(model(), dom) "w dots"
 ```

@@ -191,24 +191,18 @@ flatten(data::AbstractMeasures, dom::AbstractCartesianDomain)::Measures_1D = Mea
 flatten(data::AbstractCounts  , dom::AbstractLinearDomain)::Counts_1D      = Counts_1D(data.val)
 flatten(data::AbstractCounts  , dom::AbstractCartesianDomain)::Counts_1D   = Counts_1D(data.val[dom.index])
 
-# function append!(dest::T, source::T) where T <: AbstractMeasures
-#     append!(dest.val, source.val)
-#     append!(dest.unc, source.unc)
-#     return dest
-# end
+"""
+# reshape
 
-# """
-# # reshape
-# 
-# Reshape an array according to the size of a CartesianDomain object
-# """
-# function reshape(array::AbstractArray, dom::AbstractCartesianDomain)
-#     @assert length(array) == length(dom) "Domain and array must have the same length"
-#     out = Array{Float64}(undef, size(dom)...)
-#     out .= NaN
-#     out[dom.index] .= array
-#     return out
-# end
+Reshape an array according to the size of a CartesianDomain object
+"""
+function reshape(array::AbstractArray, dom::AbstractCartesianDomain)
+    @assert length(array) == length(dom) "Domain and array must have the same length"
+    out = Array{Float64}(undef, size(dom)...)
+    out .= NaN
+    out[dom.index] .= array
+    return out
+end
 
 
 # ____________________________________________________________________

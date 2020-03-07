@@ -15,7 +15,7 @@ y = f(x, params...);
 rng = MersenneTwister(0);
 noise = randn(rng, length(x));
 
-using DataFitting
+using DataFitting, DataFitting.Components
 data = Measures(y + noise, 1.)
 
 model = Model(:comp1 => FuncWrap(f, params...))
@@ -165,3 +165,50 @@ result = fit!(model, data)
 
 
 
+rng = MersenneTwister(0);
+
+
+dom = Domain(1:0.001:10)
+test_component(DataFitting.Components.OffsetSlope(1.1, 2.2, 3.3), dom, iter=1000);
+
+dom = CartesianDomain(100, 100)
+test_component(DataFitting.Components.OffsetSlope(1.1, 2.2, 3.3, 4.4, 5.5), dom, iter=1000);
+
+test_component(DataFitting.Components.Polynomial(1.1, 2.2, 3.3), 1:0.001:10, iter=1000);
+test_component(DataFitting.Components.Gaussian(1.1 , 4.4, 0.51), 1:0.001:10, iter=1000);
+
+dom = CartesianDomain(100, 100)
+test_component(DataFitting.Components.Gaussian(100, 30, 70, 5), dom, iter=1000);
+test_component(DataFitting.Components.Gaussian(100, 30, 70, 5, 0.5, 10), dom, iter=1000);
+
+
+dom = Domain(1:0.001:10)
+test_component(DataFitting.Components.Lorentzian(1.1 , 4.4, 0.51), dom, iter=1000);
+
+dom = CartesianDomain(100, 100)
+test_component(DataFitting.Components.Lorentzian(100, 30, 70, 5, 0.5), dom, iter=1000);
+
+
+x = Domain(1:0.05:10)
+model = Model(
+    :offset => ScalarParam(4),
+    :line1  => DataFitting.Components.Gaussian(1.1 , 4.4, 0.51),
+    :line2  => DataFitting.Components.Gaussian(0.52, 5.5, 1.2 ))
+add_dom!(model, x)
+add_expr!(model, :(offset + line1 + line2))
+
+noise = maximum(model()) * 0.01
+data = Measures(model() + noise * randn(rng, length(x)), noise);
+ret1 = fit!(model, data)
+
+
+model = Model()
+add_comp!(model, :background => DataFitting.Components.OffsetSlope(0, 0, 0., 2., 3.))
+add_comp!(model, :psf        => DataFitting.Components.Gaussian(100., 0., 0., 1, 0.3, 15))
+dom = CartesianDomain(-5:0.1:5, -4:0.1:4)
+add_dom!(model, dom)
+add_expr!(model, :(background + psf))
+
+noise = maximum(model()) * 0.1
+data = Measures(model() .+ 4 .+ noise .* randn(length(dom)), noise);
+ret1 = fit!(model, data)

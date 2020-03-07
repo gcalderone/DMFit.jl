@@ -1,6 +1,3 @@
-# ====================================================================
-#                         MODULE DataFitting
-# ====================================================================
 module DataFitting
 
 using Printf, PrettyTables
@@ -17,14 +14,13 @@ import Base.getproperty
 import Base.setproperty!
 import Base.append!
 import Base.isequal
+import Base.reshape
 
 export Domain, CartesianDomain, Measures,
     FuncWrap, ScalarParam, Smooth,
-    Model, getparamvalues, setparamvalues!, resetcounters!, domain,
-    componenttype, add_comp!,
-    add_dom!, rm_dom!, dom_count,
-    add_expr!, replaceexpr!, setflag!,
-    evaluate!, fit!, fit, probe,
+    Model, getparamvalues, setparamvalues!, resetcounters!, componenttype, domain,
+    add_comp!, add_dom!, rm_dom!, dom_count, add_expr!, replaceexpr!, setflag!,
+    evaluate!, fit!, probe,
     test_component
 
 const compsep = "_"
