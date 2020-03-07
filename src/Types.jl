@@ -23,7 +23,7 @@ abstract type AbstractMinimizer end
 # Macro to define domain, data and associated methods for any
 # dimensionality
 #
-macro code_ndim(ndim::Int)
+macro define_ndim(ndim::Int)
     @assert ndim >= 1 "Number of dimensions must be >= 1"
     out = Expr(:block)
 
@@ -164,14 +164,14 @@ macro code_ndim(ndim::Int)
 end
 
 # The following is here, rather than in components.jl, to avoid a
-# compilation error: `FuncWrap_cdata` is used in `@code_ndim`
+# compilation error: `FuncWrap_cdata` is used in `@define_ndim`
 struct FuncWrap_cdata <: AbstractComponentData
     func::Function
 end
 
-@code_ndim 1
-@code_ndim 2
-@code_ndim 3
+@define_ndim 1
+@define_ndim 2
+@define_ndim 3
 
 getaxismin(dom::AbstractLinearDomain, dim::Int) = dom.vmin[dim]
 getaxismax(dom::AbstractLinearDomain, dim::Int) = dom.vmax[dim]

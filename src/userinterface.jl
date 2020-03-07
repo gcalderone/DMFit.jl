@@ -47,6 +47,7 @@ end
 (w::UI{Model})(expr::Symbol) = w(1, expr)
 
 function (w::UI{Model})(id::Int=1)
+    evaluate!(w)  # make sure model is evaluated
     model = wrappee(w)
     c = model.instruments[id]
     i = findall(c.exprcmp)
