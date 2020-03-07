@@ -66,3 +66,15 @@ function evaluate!(cdata::Smooth_cdata, output::AbstractArray{Float64}, domain::
      output .= [mean(v[i:i+cdata.n-1]) for i in cdata.i]
     return output
 end
+
+
+module Components
+import DataFitting: AbstractDomain, Domain_1D, Domain_2D,
+    Parameter, AbstractComponent, AbstractComponentData,
+    cdata, evaluate!
+
+include("components/OffsetSlope.jl")
+include("components/Polynomial.jl")
+include("components/Gaussian.jl")
+include("components/Lorentzian.jl")
+end

@@ -400,3 +400,146 @@ To restore the normal component behaviour simply set its value to `NaN`, i.e.:
 ```julia
 setcompvalue!(model, :comp1, NaN)
 ```
+
+
+# Built-in components
+
+The following components are available in the `DataFitting.Components` module:
+- OffsetSlope (1D and 2D): an offset and slope component;
+- Polynomial (only 1D): a n-th degree polynomial function (n > 1);
+- Gaussian (1D and 2D): a Gaussian function;
+- Lorentzian (1D and 2D): a Lorentzian function;
+
+## OffsetSlope
+An offset and slope component for 1D and 2D domains.  In 2D it represents a tilted plane.
+
+The constructors are defined as follows:
+- 1D: `DataFitting.Components.OffsetSlope(offset, x0, slope)`;
+- 2D: `DataFitting.Components.OffsetSlope(offset, x0, y0, slopeX, slopeY)`;
+
+The parameters are:
+- 1D:
+  - `offset::Parameter`: a global offset;
+  - `x0::Parameter`: the X coordinate of the point where the component equals `offset`.  This parameter is fixed by default;
+  - `slope::Parameter`: the slope of the linear function;
+- 2D:
+  - `offset::Parameter`: a global offset;
+  - `x0::Parameter`: the X coordinate of the point where the component equals `offset`.  This parameter is fixed by default;
+  - `y0::Parameter`: the Y coordinate of the point where the component equals `offset`.  This parameter is fixed by default;
+  - `slopeX::Parameter` (only 2D): the slope of the plane along the X direction;
+  - `slopeY::Parameter` (only 2D): the slope of the plane along the Y direction;
+
+
+## Polynomial
+A n-th degree polynomial function (n > 1) for 1D domains.
+
+The constructor is defined as follows:
+- `DataFitting.Components.Polynomial(args...)`;
+where `args...` is a list of numbers.
+
+The parameters are:
+- `coeff::Vector{Parameter}`: vector of polynomial coefficients.
+
+
+## Gaussian
+A normalized Gaussian component for 1D and 2D domains.
+
+The constructors are defined as follows:
+- 1D: `DataFitting.Components.Gaussian(norm, center, sigma)`;
+- 2D: `DataFitting.Components.Gaussian(norm, centerX, centerY, sigma)` (implies `sigmaX=sigmaY`, `angle=0`);
+- 2D: `DataFitting.Components.Gaussian(norm, centerX, centerY, sigmaX, sigmaY, angle)`;
+
+The parameters are:
+- 1D:
+  - `norm::Parameter`: the area below the Gaussian function;
+  - `center::Parameter`: the location of the center of the Gaussian;
+  - `sigma::Parameter`: the width the Gaussian;
+
+- 2D:
+  - `norm::Parameter`: the volume below the Gaussian function;
+  - `centerX::Parameter`: the X coordinate of the center of the Gaussian;
+  - `centerY::Parameter`: the Y coordinate of the center of the Gaussian;
+  - `sigmaX::Parameter`: the width the Gaussian along the X direction (when `angle=0`);
+  - `sigmaY::Parameter`: the width the Gaussian along the Y direction (when `angle=0`);
+  - `angle::Parameter`: the rotation angle of the whole Gaussian function.
+
+
+## Lorentzian
+A Lorentzian component for 1D and 2D domains.
+
+The constructors are defined as follows:
+- 1D: `DataFitting.Components.Lorentzian(norm, center, fwhm)`;
+- 2D: `DataFitting.Components.Lorentzian(norm, centerX, centerY, fwhmX, fwhmY)`;
+
+The parameters are:
+- 1D:
+  - `norm::Parameter`: the area below the Lorentzian function;
+  - `center::Parameter`: the location of the center of the Lorentzian;
+  - `fwhm::Parameter`: the full-width at half maximum of the Lorentzian;
+
+- 2D:
+  - `norm::Parameter`: the volume below the Lorentzian function;
+  - `centerX::Parameter`: the X coordinate of the center of the Lorentzian;
+  - `centerY::Parameter`: the Y coordinate of the center of the Lorentzian;
+  - `fwhmX::Parameter`: the full-width at half maximum of the Lorentzian along the X direction (when `angle=0`);
+  - `fwhmY::Parameter`: the full-width at half maximum of the Lorentzian along the Y direction (when `angle=0`).
+  
+  
+
+## Examples:
+
+### 1D: offset + two Gaussian profiles
+```julia
+x = Domain(1:0.05:10)
+model = Model(
+    :offset => ScalarParam(4),
+    :line1  => DataFitting.Components.Gaussian(1.1 , 4.4, 0.51),
+    :line2  => DataFitting.Components.Gaussian(0.52, 5.5, 1.2 ))
+add_dom!(model, x)
+add_expr!(model, :(offset + line1 + line2))
+
+using Random
+rng = MersenneTwister(0);
+noise = maximum(model()) * 0.01
+data = Measures(model() + noise * randn(rng, length(model())), noise);
+ret1 = fit!(model, data)
+```
+
+To produce the plots I will use the [Gnuplot.jl](https://github.com/gcalderone/Gnuplot.jl) package, but the user can choose any other package:
+```julia
+using Gnuplot
+@gp    "set multi layout 2,1" :-
+@gp    domain(model) data.val data.unc "w yerr tit 'Data'" :-
+@gp :- domain(model) model(:line1) .+ model(:offset) "w l tit 'offset + line1'" :-
+@gp :- domain(model) model(:line2) .+ model(:offset) "w l tit 'offset + line2'" :-
+@gp :- domain(model) model() "w lines tit 'Model' lw 3" :-
+@gp :- 2 x[1] (data.val - model()) ./ data.unc fill(1., length(data)) "w yerr tit 'Residuals'"
+```
+
+### 2D: tilted plane + 2D Gaussian profile
+```julia
+dom = CartesianDomain(-5:0.1:5, -4:0.1:4)
+model = Model()
+add_comp!(model, :background=>DataFitting.Components.OffsetSlope(0, 0, 0., 2., 3.))
+add_comp!(model, :psf       =>DataFitting.Components.Gaussian(100., 0., 0., 1, 0.3, 15))
+add_dom!(model, dom)
+add_expr!(model, :(background + psf))
+
+noise = maximum(model()) * 0.1
+data = Measures(model() .+ 4 .+ noise .* randn(length(model())), noise);
+ret1 = fit!(model, data)
+```
+
+To produce the plots I will use the [Gnuplot.jl](https://github.com/gcalderone/Gnuplot.jl) package, but the user can choose any other package:
+```julia
+using Gnuplot
+
+# Plot the model...
+@gsp dom[1] dom[2] reshape(model(), size(dom))
+
+# ...and the residuals
+@gsp dom[1] dom[2] reshape(data.val - model(), size(dom))
+
+# Plot using pm3d style
+@gsp "set pm3d" "set palette" dom[1] dom[2] reshape(model(), size(dom)) "w dots"
+```
