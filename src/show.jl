@@ -138,7 +138,7 @@ show(io::IO, wcomp::WComponent) = show(OrderedDict{Symbol, WComponent}(wcomp.cna
 function show(io::IO, dict::OrderedDict{Symbol, WComponent})
     (table, fixed, error, hrule) = preparetable(dict)
     (length(table) > 0)  ||  (return nothing)
-    printtable(io, table , ["Component" "Param." "Value" "Range" "Log" "Expr" "Notes"], alignment=:l,
+    printtable(io, table , ["Component" "Param." "Value" "Range" "Log" "Expr" "Descr."], alignment=:l,
                hlines=hrule, formatter=ft_printf(showsettings.floatformat, [3]),
                highlighters=(Highlighter((data,i,j) -> fixed[i], showsettings.fixed),
                              Highlighter((data,i,j) -> (error[i] && j==5), showsettings.error)))

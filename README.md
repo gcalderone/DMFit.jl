@@ -492,7 +492,7 @@ The parameters are:
 ```julia
 x = Domain(1:0.05:10)
 model = Model(
-    :offset => ScalarParam(4),
+    :offset => 4,
     :line1  => DataFitting.Components.Gaussian(1.1 , 4.4, 0.51),
     :line2  => DataFitting.Components.Gaussian(0.52, 5.5, 1.2 ))
 add_dom!(model, x)

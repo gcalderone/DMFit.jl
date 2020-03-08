@@ -26,8 +26,8 @@ data = Measures(y, noise)
 # Prepare the model.  Note that we start with an empty model, and add
 # the components one by one:
 model = Model()
-add_comp!(model, :p0 => ScalarParam(1))    # add 1st component
-add_comp!(model, :p1 => ScalarParam(2))    # add 2nd component
+add_comp!(model, :p0 => 1)    # add 1st component
+add_comp!(model, :p1 => 2)    # add 2nd component
 add_dom!(model, x)                         # set domain
 add_expr!(model, :(p0 .+ p1 .* domain[1])) # add model expression
 
@@ -47,7 +47,7 @@ println("Test probability = ", 10^result.log10testprob)
 
 # Clearly this is not a good fit.  Let's add a 3rd `ScalarParam`
 # component to obtain a quadratic model
-add_comp!(model, :p2 => ScalarParam(3))          # add 3rd component
+add_comp!(model, :p2 => 3)          # add 3rd component
 
 # Replace model expression
 replaceexpr!(model, :(p0 .+ p1 .* domain[1] .+ p2 .* domain[1].^2))

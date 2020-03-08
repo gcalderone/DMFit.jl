@@ -93,12 +93,16 @@ function add_comp!(w::UI{Model}, args::Vararg{Pair, N}) where N
 
     for c in args
         @assert typeof(c[1]) == Symbol
-        @assert typeof(c[2]) <: AbstractComponent
+        @assert (typeof(c[2]) <: AbstractComponent)  ||  (typeof(c[2]) <: Real)
         @assert !(c[1] in keys(model.comp)) "Component $(c[1]) already exists"
     end
 
     for c in args
-        newcomp = deepcopy(c[2])
+        if typeof(c[2]) <: Real
+            newcomp = ScalarParam(c[2] * 1.)
+        else
+            newcomp = deepcopy(c[2])
+        end
         for pname in fieldnames(typeof(newcomp))
             par = getfield(newcomp, pname)
             if typeof(par) == Parameter
