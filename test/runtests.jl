@@ -20,7 +20,7 @@ data = Measures(y + noise, 1.)
 
 model = Model(:comp1 => FuncWrap(f, params...))
 add_dom!(model, x)
-addexpr!(model, 1, :comp1)
+add_expr!(model, 1, :comp1)
 
 model.comp1.p[1].val = 1
 model.comp1.p[2].val = 1.e-3
@@ -36,8 +36,8 @@ result = fit!(model, data, minimizer=cmpfit())
 
 
 
-addcomp!(model, :ss => DataFitting.Smooth(2))
-addexpr!(model, 1, :(ss(comp1)))
+add_comp!(model, :ss => DataFitting.Smooth(2))
+add_expr!(model, 1, :(ss(comp1)))
 
 
 
@@ -49,7 +49,7 @@ model = Model(:comp1 => FuncWrap(f1, params[1], params[2], params[3]),
               :comp2 => FuncWrap(f2, params[4], params[5]),
               :comp3 => FuncWrap(f3))
 add_dom!(model, x)
-addexpr!(model, :((comp1 .+ comp2) .* comp3))
+add_expr!(model, :((comp1 .+ comp2) .* comp3))
 result = fit!(model, data)
 
 
@@ -84,9 +84,9 @@ color = Int.(
 noise = randn(rng, length(x));
 data2 = Measures(1.3 * (y + noise), 1.3)
 
-addcomp!(model, :calib=>ScalarParam(1))
+add_comp!(model, :calib=>ScalarParam(1))
 add_dom!(model, x)
-addexpr!(model, 2, :(calib .* ((comp1 .+ comp2) .* comp3)))
+add_expr!(model, 2, :(calib .* ((comp1 .+ comp2) .* comp3)))
 result = fit!(model, [data, data2])
 
 
@@ -100,7 +100,7 @@ test_component(FuncWrap(f, params...), x; iter=1000)
     dummy = f(x, params...)
 end
 
-@eval DataFitting @code_ndim 4
+@eval DataFitting @define_ndim 4
 
 # 1D
 dom = Domain(5)
@@ -138,7 +138,7 @@ data = Measures(d + randn(rng, size(d)), 1.)
 
 model = Model(:comp1 => FuncWrap(f, 1, 2))
 add_dom!(model, dom)
-addexpr!(model, :comp1)
+add_expr!(model, :comp1)
 result = fit!(model, data)
 
 
