@@ -43,38 +43,37 @@ Gaussian(norm, center, sigma) = Gaussian_1D(norm, center, sigma)
 Gaussian(norm, centerX, centerY, sigmaX, sigmaY, angle) = Gaussian_2D(norm, centerX, centerY, sigmaX, sigmaY, angle)
 function Gaussian(norm, centerX, centerY, sigma)
     out = Gaussian_2D(norm, centerX, centerY, sigma, sigma, 0.)
-    out.sigmaX.fixed = true
+    out.sigmaX.free = false
     out.sigmaX.expr = "this_sigmaY"
-    out.angle.fixed = true
+    out.angle.free = false
     return out
 end
 
 
 # ====================================================================
 # Prepare component `cdata`
-mutable struct Gaussian_cdata <: AbstractComponentData
+mutable struct Gaussian_cdata
     ix::Vector{Int}
     iy::Vector{Int}
     Gaussian_cdata() = new(Vector{Int}(), Vector{Int}())
 end
 
-cdata(comp::Gaussian_1D, domain::Domain_1D) = Gaussian_cdata()
-cdata(comp::Gaussian_2D, domain::Domain_2D) = Gaussian_cdata()
+ceval_data(domain::Domain_1D, comp::Gaussian_1D) = (Gaussian_cdata(), length(domain))
+ceval_data(domain::Domain_2D, comp::Gaussian_2D) = (Gaussian_cdata(), length(domain))
 
 
 # ====================================================================
 # Evaluate component 
-function evaluate!(cdata::Gaussian_cdata, output::Vector{Float64}, domain::Domain_1D,
-                   norm, center, sigma)
+function evaluate(c::CompEval{Domain_1D, Gaussian_1D},
+                  norm, center, sigma)
     # TODO: optimize using cdata
-    x = domain[1]
-    @. (output = exp( ((x - center) / sigma)^2. / (-2.)) / 
+    x = c.domain[1]
+    @. (c.eval = exp( ((x - center) / sigma)^2. / (-2.)) / 
         2.5066282746310002 / sigma * norm) # sqrt(2pi) = 2.5066282746310002
-    return output
 end
 
 
-function evaluate!(cdata::Gaussian_cdata, output::Vector{Float64}, domain::Domain_2D,
+function evaluate(c::CompEval{Domain_2D, Gaussian_2D},
                    norm, centerX, centerY, sigmaX, sigmaY, angle)
     angle *= -pi / 180.
     a =  (cos(angle) / sigmaX)^2 / 2  +  (sin(angle) / sigmaY)^2 / 2
@@ -82,10 +81,10 @@ function evaluate!(cdata::Gaussian_cdata, output::Vector{Float64}, domain::Domai
     c =  (sin(angle) / sigmaX)^2 / 2  +  (cos(angle) / sigmaY)^2 / 2
 
     # TODO: optimize using cdata
-    x = domain[1]
-    y = domain[2]
+    x = c.domain[1]
+    y = c.domain[2]
     
-    @. (output = norm *
+    @. (c.eval = norm *
         exp(
             -(
                 a * (x - centerX)^2. +
@@ -93,5 +92,4 @@ function evaluate!(cdata::Gaussian_cdata, output::Vector{Float64}, domain::Domai
                 c *                 (y - centerY)^2.
             )
         ) / 6.283185307179586 / sigmaX / sigmaY) # 2pi = 6.283185307179586
-    return output
 end

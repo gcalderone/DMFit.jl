@@ -7,7 +7,7 @@ mutable struct OffsetSlope_1D <: AbstractComponent
 
     function OffsetSlope_1D(offset::Number, x0::Number, slope::Number)
         out = new(Parameter(offset), Parameter(x0), Parameter(slope))
-        out.x0.fixed = true
+        out.x0.free = false
         return out
     end
 end
@@ -22,8 +22,8 @@ mutable struct OffsetSlope_2D <: AbstractComponent
 
     function OffsetSlope_2D(offset::Number, x0::Number, y0::Number, slopeX::Number, slopeY::Number)
         out = new(Parameter(offset), Parameter(x0), Parameter(y0), Parameter(slopeX), Parameter(slopeY))
-        out.x0.fixed = true
-        out.y0.fixed = true
+        out.x0.free = false
+        out.y0.free = false
         return out
     end
 end
@@ -31,31 +31,24 @@ end
 OffsetSlope(offset, x0, slope) = OffsetSlope_1D(offset, x0, slope)
 OffsetSlope(offset, x0, y0, slopeX, slopeY) = OffsetSlope_2D(offset, x0, y0, slopeX, slopeY)
 
-
-# ====================================================================
-# Allocate the output array and the component `cdata`
-struct OffsetSlope_cdata <: AbstractComponentData; end
-
-cdata(comp::OffsetSlope_1D, domain::Domain_1D) = OffsetSlope_cdata()
-cdata(comp::OffsetSlope_2D, domain::Domain_2D) = OffsetSlope_cdata()
+ceval_data(domain::Domain_1D, comp::OffsetSlope_1D) = (nothing, length(domain))
+ceval_data(domain::Domain_2D, comp::OffsetSlope_2D) = (nothing, length(domain))
 
 
 # ====================================================================
 # Evaluate component 
-function evaluate!(cdata::OffsetSlope_cdata, output::Vector{Float64}, domain::Domain_1D,
-                   offset, x0, slope)
-    @. (output = slope * (domain[1] - x0) + offset)
-    return output
+function evaluate(c::CompEval{Domain_1D, OffsetSlope_1D},
+                  offset, x0, slope)
+    @. (c.eval = slope * (c.domain[1] - x0) + offset)
 end
 
 
-function evaluate!(cdata::OffsetSlope_cdata, output::Vector{Float64}, domain::Domain_2D,
+function evaluate(c::CompEval{Domain_2D, OffsetSlope_2D},
                    offset, x0, y0, slopeX, slopeY)
-    x = domain[1]
-    y = domain[2]
-    @. (output = 
+    x = c.domain[1]
+    y = c.domain[2]
+    @. (c.eval = 
         slopeX * (x - x0) + 
         slopeY * (y - y0) +
         offset)
-    return output
 end
