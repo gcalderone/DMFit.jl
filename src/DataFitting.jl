@@ -25,12 +25,13 @@ include("domain.jl")
 # Parameter
 #
 mutable struct Parameter
+    _i::Int
     val::Float64
     low::Float64              # lower limit value
     high::Float64             # upper limit value
     step::Float64
     free::Bool
-    Parameter(value::Number) = new(float(value), -Inf, +Inf, NaN, true)
+    Parameter(value::Number) = new(0, float(value), -Inf, +Inf, NaN, true)
 end
 
 # ====================================================================
@@ -47,9 +48,11 @@ function getparams(comp::AbstractComponent)
     for pname in fieldnames(typeof(comp))
         par = getfield(comp, pname)
         if isa(par, Parameter)
+            par._i = 0
             params[pname] = par
         elseif isa(par, Vector{Parameter})
             for i in 1:length(par)
+                par[i]._i = i
                 params[Symbol(pname, i)] = par[i]
             end
         end
@@ -389,6 +392,35 @@ function minimize(minimizer::lsqfit, func::Function, params::Vector{Parameter})
 end
 
 
+macro enable_CMPFit()
+    return esc(:(
+        import DataFitting.minimize;
+
+        mutable struct cmpfit <: DataFitting.AbstractMinimizer;
+        config::CMPFit.Config;
+        cmpfit() = new(CMPFit.Config());
+        end;
+
+        function minimize(minimizer::cmpfit, func::Function, params::Vector{DataFitting.Parameter});
+        guess = getfield.(params, :val);
+        low   = getfield.(params, :low);
+        high  = getfield.(params, :high);
+        parinfo = CMPFit.Parinfo(length(guess));
+        for i in 1:length(guess);
+        llow  = isfinite(low[i])   ?  1  :  0;
+        lhigh = isfinite(high[i])  ?  1  :  0;
+        parinfo[i].limited = (llow, lhigh);
+        parinfo[i].limits  = (low[i], high[i]);
+        end;
+        bestfit = CMPFit.cmpfit((pvalues) -> func(pvalues),
+                                guess, parinfo=parinfo, config=minimizer.config);
+        return (:Optimal, getfield.(Ref(bestfit), :param), getfield.(Ref(bestfit), :perror));
+        end;
+    ))
+end
+
+
+
 fit!(model::Model, data::T; kw...) where T<:AbstractMeasures =
     fit!(model, [data]; kw...)
 
@@ -424,7 +456,7 @@ function fit!(model::Model, data::Vector{T};
 
     # Prepare output
     quick_evaluate(model)  # ensure best fit values are used
-    comp = OrderedDict{Symbol, OrderedDict{Symbol, BestFitPar}}()
+    comp = OrderedDict{Symbol, OrderedDict{Symbol, Union{BestFitPar, Vector{BestFitPar}}}}()
     for cname in keys(model.comps)
         comp[cname] = OrderedDict{Symbol, BestFitPar}()
     end
@@ -432,8 +464,20 @@ function fit!(model::Model, data::Vector{T};
     for (cpname, par) in model.params
         cname = cpname[1]
         pname = cpname[2]
-        comp[cname][pname] = BestFitPar(model.pvalues[i], uncerts[i],
-                                        (i in ifree), model.actual[i])
+        bfpar = BestFitPar(model.pvalues[i], uncerts[i],
+                           (i in ifree), model.actual[i])
+        if par._i == 0
+            if length(vv) > 0
+            end
+            comp[cname][pname] = bfpar
+        else
+            pname = Symbol(string(pname)[1:end-length(string(i))])
+            if par._i == 1
+                comp[cname][pname] = [bfpar]
+            else
+                push!(comp[cname][pname], bfpar)
+            end
+        end
         i += 1
     end
     cost = sum(abs2, model.buffer)

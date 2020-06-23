@@ -26,7 +26,7 @@ data = Measures(y, noise)
 
 # Prepare the model with a `FuncWrap` component.  Provide the guess
 # values with the `params` vector.
-model = Model(:comp1 => FuncWrap(f, params...))
+model = Model(Domain(x), :comp1 => DataFitting.FuncWrap(f, params...))
 
 # Set model domain and model expression, which in this case is simply
 # the `comp1` component
