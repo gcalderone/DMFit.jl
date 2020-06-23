@@ -28,20 +28,15 @@ data = Measures(y, noise)
 # values with the `params` vector.
 model = Model(Domain(x), :comp1 => DataFitting.FuncWrap(f, params...))
 
-# Set model domain and model expression, which in this case is simply
-# the `comp1` component
-add_dom!(model, x)
-add_expr!(model, 1, :comp1)
-
 # Fit the model to empirical data
 result = fit!(model, data)
 
 # Print best fit parameters
-for i in 1:length(result.comp1.p)
-    println("p[$i] = ", result.comp1.p[i].val, " ± ", result.comp1.p[i].unc)
+for i in 1:length(result[:comp1].p)
+    println("p[$i] = ", result[:comp1].p[i].val, " ± ", result[:comp1].p[i].unc)
 end
 
 # Plot data and best fit model
 using Gnuplot
-@gp    domain(model) data.val data.unc "w yerr" :- 
-@gp :- domain(model) model() "w line"
+@gp    x data.val data.unc "w yerr" :-
+@gp :- x model[1] "w line"

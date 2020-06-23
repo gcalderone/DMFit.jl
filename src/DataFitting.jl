@@ -12,6 +12,11 @@ import Base.size
 import Base.length
 import Base.getindex
 import Base.reshape
+import Base.propertynames
+import Base.getproperty
+import Base.getindex
+import Base.setindex!
+import Base.iterate
 
 
 export Domain, CartesianDomain, Measures,
@@ -25,13 +30,12 @@ include("domain.jl")
 # Parameter
 #
 mutable struct Parameter
-    _i::Int
     val::Float64
     low::Float64              # lower limit value
     high::Float64             # upper limit value
     step::Float64
     free::Bool
-    Parameter(value::Number) = new(0, float(value), -Inf, +Inf, NaN, true)
+    Parameter(value::Number) = new(float(value), -Inf, +Inf, NaN, true)
 end
 
 # ====================================================================
@@ -44,16 +48,14 @@ abstract type AbstractComponent end
 
 
 function getparams(comp::AbstractComponent)
-    params = OrderedDict{Symbol, Parameter}()
+    params = OrderedDict{Tuple{Symbol,Int}, Parameter}()
     for pname in fieldnames(typeof(comp))
         par = getfield(comp, pname)
         if isa(par, Parameter)
-            par._i = 0
-            params[pname] = par
+            params[(pname, 0)] = par
         elseif isa(par, Vector{Parameter})
             for i in 1:length(par)
-                par[i]._i = i
-                params[Symbol(pname, i)] = par[i]
+                params[(pname, i)] = par[i]
             end
         end
     end
@@ -66,7 +68,7 @@ end
 mutable struct CompEval{TDomain <: AbstractDomain, TComp <: AbstractComponent}
     domain::TDomain
     comp::TComp
-    params::OrderedDict{Symbol, Parameter}
+    params::OrderedDict{Tuple{Symbol,Int}, Parameter}
     cdata
     counter::Int
     lastvalues::Vector{Float64}
@@ -178,7 +180,7 @@ mutable struct Prediction
         end
         out = new(domain, cevals, Vector{Float64}(), false, reduce, 0)
         evaluate(out)  # TODO: is this correct?
-        out
+        return out
     end
 end
 
@@ -216,7 +218,7 @@ mutable struct Model
     preds::Vector{Prediction}
     comps::OrderedDict{Symbol, AbstractComponent}
     cfree::OrderedDict{Symbol, Bool}
-    params::OrderedDict{NTuple{2, Symbol}, Parameter}
+    params::OrderedDict{Tuple{Symbol, Symbol, Int}, Parameter}
     pvalues::Vector{Float64}
     actual::Vector{Float64}
     buffer::Vector{Float64}
@@ -226,7 +228,7 @@ end
 function Model(v::Vector{Prediction})
     model = Model(v, OrderedDict{Symbol, AbstractComponent}(),
                   OrderedDict{Symbol, Bool}(),
-                  OrderedDict{NTuple{2, Symbol}, Parameter}(),
+                  OrderedDict{Tuple{Symbol, Symbol, Int}, Parameter}(),
                   Vector{Float64}(), Vector{Float64}(), Vector{Float64}(), default_partransform)
     evaluate(model)
     return model
@@ -250,7 +252,7 @@ function evaluate(model::Model)
             model.comps[cname] = ceval.comp
             model.cfree[cname] = get(cfree, cname, true)
             for (pname, par) in ceval.params
-                cpname = (cname, pname)
+                cpname = (cname, pname[1], pname[2])
                 model.params[cpname] = par
             end
         end
@@ -263,7 +265,7 @@ function evaluate(model::Model)
         for (cname, ceval) in pred.cevals
             empty!(ceval.ipar)
             for (pname, par) in ceval.params
-                cpname = (cname, pname)
+                cpname = (cname, pname[1], pname[2])
                 push!(ceval.ipar, findfirst(cpnames .== Ref(cpname)))
             end
             update(ceval)
@@ -306,10 +308,9 @@ end
 
 Base.getindex(m::Model, i::Int) = m.preds[i].eval
 Base.getindex(m::Model, cname::Symbol) = m.comps[cname]
-Base.getindex(m::Model, cname::Symbol, pname::Symbol) = m.params[(cname, pname)]
 
-parindex(model::Model, cname::Symbol, pname::Symbol) =
-    findfirst(keys(model.params) .== Ref((cname, pname)))
+parindex(model::Model, cname::Symbol, pname::Symbol, i::Int=0) =
+    findfirst(keys(model.params) .== Ref((cname, pname, i)))
 
 function freeze(model::Model, cname::Symbol)
     @assert cname in keys(model.cfree) "Component $c is not defined"
@@ -330,11 +331,24 @@ struct BestFitPar
     val::Float64
     unc::Float64
     free::Bool
-    actual::Float64  # value after transformation
+    calc::Float64  # value after transformation
 end
 
+struct BestFitComp
+    params::OrderedDict{Symbol, Union{BestFitPar, Vector{BestFitPar}}}
+    BestFitComp() = new(OrderedDict{Symbol, Union{BestFitPar, Vector{BestFitPar}}}())
+end
+
+Base.propertynames(comp::BestFitComp) = keys(getfield(comp, :params))
+Base.getproperty(comp::BestFitComp, p::Symbol) = getfield(comp, :params)[p]
+Base.getindex(comp::BestFitComp, p::Symbol) = getfield(comp, :params)[p]
+Base.length(comp::BestFitComp) = length(getfield(comp, :params))
+Base.iterate(comp::BestFitComp, args...) = iterate(getfield(comp, :params), args...)
+Base.setindex!(comp::BestFitComp, x, p::Symbol) = getfield(comp, :params)[p] = x
+
+
 struct BestFitResult
-    comps::OrderedDict{Symbol, OrderedDict{Symbol, Union{BestFitPar, Vector{BestFitPar}}}}
+    comps::OrderedDict{Symbol, BestFitComp}
     ndata::Int
     dof::Int
     cost::Float64
@@ -368,7 +382,6 @@ function residuals1d(model::Model, data1d::Vector{Measures_1D})
     end
     return model.buffer
 end
-
 
 
 # ====================================================================
@@ -456,33 +469,32 @@ function fit!(model::Model, data::Vector{T};
 
     # Prepare output
     quick_evaluate(model)  # ensure best fit values are used
-    comp = OrderedDict{Symbol, OrderedDict{Symbol, Union{BestFitPar, Vector{BestFitPar}}}}()
+    comps = OrderedDict{Symbol, BestFitComp}()
     for cname in keys(model.comps)
-        comp[cname] = OrderedDict{Symbol, BestFitPar}()
+        comps[cname] = BestFitComp()
     end
     i = 1
     for (cpname, par) in model.params
         cname = cpname[1]
         pname = cpname[2]
+        parid = cpname[3]
         bfpar = BestFitPar(model.pvalues[i], uncerts[i],
                            (i in ifree), model.actual[i])
-        if par._i == 0
-            if length(vv) > 0
-            end
-            comp[cname][pname] = bfpar
+        if parid == 0
+            comps[cname][pname] = bfpar
         else
-            pname = Symbol(string(pname)[1:end-length(string(i))])
-            if par._i == 1
-                comp[cname][pname] = [bfpar]
+            if parid == 1
+                comps[cname][pname] = [bfpar]
             else
-                push!(comp[cname][pname], bfpar)
+                push!(comps[cname][pname], bfpar)
             end
         end
         i += 1
     end
     cost = sum(abs2, model.buffer)
     dof = length(model.buffer) - length(ifree)
-    result = BestFitResult(comp, length(model.buffer), dof, cost, status,
+
+    result = BestFitResult(comps, length(model.buffer), dof, cost, status,
                            logccdf(Chisq(dof), cost) * log10(exp(1)),
                            float(Base.time_ns() - elapsedTime) / 1.e9)
     return result

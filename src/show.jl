@@ -13,7 +13,7 @@ mutable struct ShowSettings
                          crayon"light_blue", crayon"light_blue negative bold",
                          crayon"dark_gray bold", crayon"dark_gray",
                          crayon"light_red blink", crayon"negative", crayon"green bold",
-                         false)
+                         true)
 end
 
 const showsettings = ShowSettings()
@@ -95,9 +95,9 @@ function show(io::IO, data::AbstractData)
         nan = length(findall(isnan.(a))) + length(findall(isinf.(a)))
         a = a[findall(isfinite.(a))]
         push!(error, nan > 0)
-        table = vcat(table, [string(name) minimum(a) maximum(a) mean(a) median(a) std(a) (nan > 0  ?  "⚠"  :  "") ])
+        table = vcat(table, [string(name) minimum(a) maximum(a) mean(a) median(a) std(a) (nan > 0  ?  string(nan)  :  "") ])
     end
-    printtable(io, table, ["", "Min", "Max", "Mean", "Median", "Std. dev.", "⚠"],
+    printtable(io, table, ["", "Min", "Max", "Mean", "Median", "Std. dev.", "Nan/Inf"],
                formatters=ft_printf(showsettings.floatformat, 2:6),
                highlighters=(Highlighter((data,i,j) -> error[i], showsettings.error)))
 end
@@ -122,7 +122,11 @@ function preparetable(comp::AbstractComponent, cname="")
     ctype = join(ctype, ".")
 
     for (pname, param) in getparams(comp)
-        parname = string(pname) .* (param.free  ?  ""  :  " (FIXED)")
+        parname = string(pname[1])
+        if pname[2] >= 1
+            parname *= "[" * string(pname[2]) * "]"
+        end
+        parname *= (param.free  ?  ""  :  " (FIXED)")
         (!showsettings.fixedpars)  &&  (!param.free)  &&  continue
         range = strip(@sprintf("%7.2g:%-7.2g", param.low, param.high))
         (range == "-Inf:Inf")  &&  (range = "")
@@ -191,7 +195,7 @@ function show(io::IO, pred::Prediction)
         table[i, 1] = string(cname)
         table[i, 2] = ceval.counter
         table[i, 3:5] = [minimum(v), maximum(v), mean(v)]
-        table[i, 6] = (nan+inf > 0 ? "⚠" : "")
+        table[i, 6] = (nan+inf > 0  ?  string(nan)  :  "")
         push!(error, (nan+inf > 0))
         i += 1
     end
@@ -203,23 +207,22 @@ function show(io::IO, pred::Prediction)
     table[i, 1] = "Reduced"
     table[i, 2] = pred.counter
     table[i, 3:5] = [minimum(v), maximum(v), mean(v)]
-    table[i, 6] = (nan+inf > 0 ? "⚠" : "")
+    table[i, 6] = (nan+inf > 0  ?  string(nan)  :  "")
     push!(error, (nan+inf > 0))
 
-    printtable(io, table, ["Label", "Counter", "Min", "Max", "Mean", "⚠"], alignment=:l,
+    printtable(io, table, ["Label", "Counter", "Min", "Max", "Mean", "NaN/Inf"], alignment=:l,
                hlines=[0,1,length(pred.cevals)+1,length(pred.cevals)+2],
                formatters=ft_printf(showsettings.floatformat, 3:5),
                highlighters=(Highlighter((data,i,j) -> (error[i] && j==5), showsettings.error)))
 end
 
 
-
 show(io::IO, par::BestFitPar) = println(io, par.val, " ± ", par.unc,
-                                        (par.val == par.actual  ?  ""  :
-                                         " (calculated value: " * string(par.actual) * ")"))
+                                        (par.val == par.calc  ?  ""  :
+                                         " (calculated value: " * string(par.calc) * ")"))
 
 
-function preparetable(comp::OrderedDict{Symbol, Union{BestFitPar, Array{BestFitPar,1}}})
+function preparetable(comp::BestFitComp)
     table = Matrix{Union{String,Float64}}(undef, 0, 5)
     fixed = Vector{Bool}()
     error = Vector{Bool}()
@@ -231,22 +234,33 @@ function preparetable(comp::OrderedDict{Symbol, Union{BestFitPar, Array{BestFitP
                 par = param[ii]
                 (!showsettings.fixedpars)  &&  (!par.free)  &&  continue
                 spname = string(pname) * "[" * string(ii) * "]"
-                table = vcat(table, ["" spname par.val par.unc par.actual])
+                table = vcat(table, ["" spname par.val par.unc par.calc])
                 push!(fixed, !par.free)
                 push!(error, !isfinite(par.unc))
-                push!(watch, par.val != par.actual)
+                push!(watch, par.val != par.calc)
             end
         else
             par = param
             (!showsettings.fixedpars)  &&  (!par.free)  &&  continue
             spname = string(pname)
-            table = vcat(table, ["" spname par.val par.unc par.actual])
+            table = vcat(table, ["" spname par.val par.unc par.calc])
             push!(fixed, !par.free)
             push!(error, !isfinite(par.unc))
-            push!(watch, par.val != par.actual)
+            push!(watch, par.val != par.calc)
         end
     end
     return (table, fixed, error, watch)
+end
+
+
+function show(io::IO, comp::BestFitComp)
+    (table, fixed, error, watch) = preparetable(comp)
+    (length(table) == 0)  &&  return
+    printtable(io, table , ["Component" "Param." "Value" "Uncert." "Calculated"], alignment=:l,
+               hlines=[0,1,size(table)[1]+1], formatters=ft_printf(showsettings.floatformat, [3,4,5]),
+               highlighters=(Highlighter((data,i,j) -> (fixed[i]  &&  (j in (2,3,4))), showsettings.fixed),
+                             Highlighter((data,i,j) -> (watch[i]  &&  (j==5)), showsettings.highlighted),
+                             Highlighter((data,i,j) -> (error[i]  &&  (!fixed[i])  &&  (j==4)), showsettings.error)))
 end
 
 
