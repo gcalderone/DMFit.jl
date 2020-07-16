@@ -132,7 +132,7 @@ result2 = fit!(model2, [data, data2])
 ```
 
 ## Retrieve results
-The results of the fitting are available as a `FitResult` structure, as returned by the `fit!` fuction.  The structure dump for the `result2` in the example above is as follows:
+The results of the fitting are available as a `FitResult` structure, as returned by the `fit!` function.  The structure dump for the `result2` in the example above is as follows:
 ```julia
 dump(result2)
 DataFitting.FitResult
